@@ -3,7 +3,7 @@
 //
 
 #include "qjs-runtime.h"
-#include "memory.h"
+#include "jmemory.h"
 #include "list.h"
 #include <stdio.h>
 
@@ -74,8 +74,6 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque) {
 
     init_list_head(&rt->context_list);
 
-    printf("size:%d\n", rt->malloc_state.malloc_size);
-
     return rt;
 }
 
@@ -110,4 +108,17 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt) {
     PRId64
     "\n\n",
             (int) sizeof(void *) * 8, (int64_t) (ssize_t) s->malloc_limit);
+
+
+    fprintf(fp, "%-20s %8s %8s\n", "NAME", "COUNT", "SIZE");
+
+    if (s->malloc_count) {
+        fprintf(fp, "%-20s %8"PRId64" %8"PRId64"  (%0.1f per block)\n",
+                "memory allocated", s->malloc_count, s->malloc_size,
+                (double)s->malloc_size / s->malloc_count);
+        fprintf(fp, "%-20s %8"PRId64" %8"PRId64"  (%d overhead, %0.1f average slack)\n",
+                "memory used", s->memory_used_count, s->memory_used_size,
+                MALLOC_OVERHEAD, ((double)(s->malloc_size - s->memory_used_size) /
+                                  s->memory_used_count));
+    }
 }

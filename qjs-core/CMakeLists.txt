@@ -25,7 +25,7 @@ set(SOURCE_CORE_FILES
         context/context.c
         utils/cutils.c
         memory/gc.c
-        memory/memory.c)
+        memory/jmemory.c)
 
 
 add_library(${QJS_CORE_NAME} ${SOURCE_CORE_FILES})
