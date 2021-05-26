@@ -6,8 +6,55 @@
 #define RUNTIME_H
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+#include "list.h"
+
+typedef struct JSMallocState {
+    size_t malloc_count;
+    size_t malloc_size;
+    size_t malloc_limit;
+    void *opaque; /* user opaque */
+} JSMallocState;
+
+typedef struct JSMallocFunctions {
+    void *(*js_malloc)(JSMallocState *s, size_t size);
+    void (*js_free)(JSMallocState *s, void *ptr);
+    void *(*js_realloc)(JSMallocState *s, void *ptr, size_t size);
+    size_t (*js_malloc_usable_size)(const void *ptr);
+} JSMallocFunctions;
+
+typedef struct JSRefCountHeader {
+    int ref_count;
+} JSRefCountHeader;
+
+typedef enum {
+    JS_GC_OBJ_TYPE_JS_OBJECT,
+    JS_GC_OBJ_TYPE_FUNCTION_BYTECODE,
+    JS_GC_OBJ_TYPE_SHAPE,
+    JS_GC_OBJ_TYPE_VAR_REF,
+    JS_GC_OBJ_TYPE_ASYNC_FUNCTION,
+    JS_GC_OBJ_TYPE_JS_CONTEXT,
+} JSGCObjectTypeEnum;
+
+/* header for GC objects. GC objects are C data structures with a
+   reference count that can reference other GC objects. JS Objects are
+   a particular type of GC object. */
+struct JSGCObjectHeader {
+    int ref_count; /* must come first, 32-bit */
+    JSGCObjectTypeEnum gc_obj_type : 4;
+    uint8_t mark : 4; /* used by the GC */
+    uint8_t dummy1; /* not used by the GC */
+    uint16_t dummy2; /* not used by the GC */
+    struct list_head link;
+};
+
+typedef struct JSGCObjectHeader JSGCObjectHeader;
+
 
 typedef struct JSRuntime JSRuntime;
+typedef struct JSContext JSContext;
+
+
 
 typedef struct JSMemoryUsage {
     int64_t malloc_size, malloc_limit, memory_used_size;

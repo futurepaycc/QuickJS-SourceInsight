@@ -4,6 +4,5 @@
 
 #ifndef TUTORIAL_QJS_H
 #define TUTORIAL_QJS_H
-#include "qjs-core.h"
-#include "qjs-runtime.h"
+int main_entry(int argc, char **argv);
 #endif //TUTORIAL_QJS_H

@@ -5,7 +5,8 @@
 #ifndef QJS_JSSTRING_H
 #define QJS_JSSTRING_H
 
-#include "qjs-runtime.h"
+#include <qjs-runtime.h>
+
 typedef struct JSString JSString;
 typedef struct JSString JSAtomStruct;
 
@@ -26,5 +27,10 @@ struct JSString {
     } u;
 };
 
+
+/* Note: the string contents are uninitialized */
+static JSString *js_alloc_string_rt(JSRuntime *rt, int max_len, int is_wide_char);
+
+static JSString *js_alloc_string(JSContext *ctx, int max_len, int is_wide_char);
 
 #endif //QJS_JSSTRING_H

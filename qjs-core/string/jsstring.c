@@ -16,8 +16,16 @@ static JSString *js_alloc_string_rt(JSRuntime *rt, int max_len, int is_wide_char
     str->atom_type = 0;
     str->hash = 0;          /* optional but costless */
     str->hash_next = 0;     /* optional */
-#ifdef DUMP_LEAKS
-    list_add_tail(&str->link, &rt->string_list);
-#endif
+
     return str;
+}
+
+static JSString *js_alloc_string(JSContext *ctx, int max_len, int is_wide_char)
+{
+    JSString *p;
+    p = js_alloc_string_rt(ctx->rt, max_len, is_wide_char);
+    if (!p) {
+        return NULL;
+    }
+    return p;
 }

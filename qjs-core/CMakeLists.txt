@@ -14,6 +14,7 @@ set(INCLUDE_CORE_PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/context"
         "${CMAKE_CURRENT_SOURCE_DIR}/runtime"
         "${CMAKE_CURRENT_SOURCE_DIR}/utils"
+        "${CMAKE_CURRENT_SOURCE_DIR}/string"
         "${CMAKE_CURRENT_SOURCE_DIR}/memory"
         "${CMAKE_CURRENT_SOURCE_DIR}/api")
 
@@ -21,6 +22,7 @@ set(INCLUDE_CORE_PUBLIC ${INCLUDE_CORE_PUBLIC} PARENT_SCOPE) # for qjs-port
 set(INCLUDE_CORE_PRIVATE ${INCLUDE_CORE_PRIVATE} PARENT_SCOPE) # for tests/unit-core
 
 set(SOURCE_CORE_FILES
+        include/qjs.c
         runtime/qjs-runtime.c
         context/context.c
         utils/cutils.c
