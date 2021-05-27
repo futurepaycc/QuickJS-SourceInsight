@@ -6,6 +6,9 @@ project (${QJS_CORE_NAME} C)
 include(CheckLibraryExists)
 
 add_compile_definitions(CONFIG_VERSION="20210524")
+add_compile_definitions(CONFIG_BIGNUM=1)
+add_compile_definitions(CONFIG_ATOMICS=1)
+
 
 # Include directories
 set(INCLUDE_CORE_PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -23,6 +26,7 @@ set(INCLUDE_CORE_PRIVATE ${INCLUDE_CORE_PRIVATE} PARENT_SCOPE) # for tests/unit-
 
 set(SOURCE_CORE_FILES
         include/qjs.c
+        string/jsstring.c
         runtime/qjs-runtime.c
         context/context.c
         utils/cutils.c

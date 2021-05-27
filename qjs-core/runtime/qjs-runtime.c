@@ -6,15 +6,7 @@
 #include "jmemory.h"
 #include "list.h"
 #include <stdio.h>
-
-struct JSRuntime {
-    JSMallocFunctions mf;
-    JSMallocState malloc_state;
-
-    struct list_head context_list; /* list of JSContext.link */
-
-};
-
+#include "jsstring.h"
 
 static size_t js_malloc_usable_size_unknown(const void *ptr)
 {
@@ -51,7 +43,10 @@ void *js_mallocz_rt(JSRuntime *rt, size_t size)
 }
 
 
+void JS_FreeRuntime(JSRuntime *rt)
+{
 
+}
 
 JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque) {
     JSRuntime * rt;
@@ -73,9 +68,22 @@ JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque) {
     rt->malloc_state = ms;
 
     init_list_head(&rt->context_list);
+    if (JS_InitAtoms(rt))
+        goto fail;
 
     return rt;
+    fail:
+    JS_FreeRuntime(rt);
+    return NULL;
 }
+
+void JS_SetRuntimeInfo(JSRuntime *rt, const char *s)
+{
+    if (rt)
+        rt->rt_info = s;
+}
+
+
 
 JSRuntime *JS_NewRuntime(void)
 {

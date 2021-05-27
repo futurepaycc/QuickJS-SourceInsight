@@ -49,10 +49,36 @@ struct JSGCObjectHeader {
 };
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
-
-
 typedef struct JSRuntime JSRuntime;
 typedef struct JSContext JSContext;
+typedef uint32_t JSClassID;
+typedef uint32_t JSAtom;
+
+
+typedef struct JSString JSString;
+typedef struct JSString JSAtomStruct;
+
+struct JSRuntime {
+    JSMallocFunctions mf;
+    JSMallocState malloc_state;
+    const char *rt_info;
+
+    int atom_hash_size; /* power of two */
+    int atom_count;
+    int atom_size;
+    int atom_count_resize; /* resize hash table at this count */
+    uint32_t *atom_hash;
+    JSAtomStruct **atom_array;
+    int atom_free_index; /* 0 = none */
+    struct list_head context_list; /* list of JSContext.link */
+
+};
+
+typedef struct JSContext {
+    JSGCObjectHeader header; /* must come first */
+    JSRuntime *rt;
+    struct list_head link;
+} JSContext;
 
 
 
@@ -90,12 +116,35 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt);
 
 JSRuntime *JS_NewRuntime(void);
 
+/* info lifetime must exceed that of rt */
+void JS_SetRuntimeInfo(JSRuntime *rt, const char *info);
+JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque);
+void JS_FreeRuntime(JSRuntime *rt);
+
 void *js_malloc_rt(JSRuntime *rt, size_t size);
 void js_free_rt(JSRuntime *rt, void *ptr);
 void *js_realloc_rt(JSRuntime *rt, void *ptr, size_t size);
 size_t js_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
 void *js_mallocz_rt(JSRuntime *rt, size_t size);
 
+JSContext *JS_NewCustomContext(JSRuntime *rt);
 
+
+struct JSString {
+    JSRefCountHeader header; /* must come first, 32-bit */
+    uint32_t len : 31;
+    uint8_t is_wide_char : 1; /* 0 = 8 bits, 1 = 16 bits characters */
+    /* for JS_ATOM_TYPE_SYMBOL: hash = 0, atom_type = 3,
+       for JS_ATOM_TYPE_PRIVATE: hash = 1, atom_type = 3
+       XXX: could change encoding to have one more bit in hash */
+    uint32_t hash : 30;
+    uint8_t atom_type : 2; /* != 0 if atom, JS_ATOM_TYPE_x */
+    uint32_t hash_next; /* atom_index for JS_ATOM_TYPE_SYMBOL */
+
+    union {
+        uint8_t str8[0]; /* 8 bit strings will get an extra null terminator */
+        uint16_t str16[0];
+    } u;
+};
 
 #endif //QJS_JRUNTEIM_H

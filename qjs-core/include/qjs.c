@@ -11,6 +11,7 @@ int main_entry(int argc, char **argv) {
     JSContext *ctx;
     rt = JS_NewRuntime();
 
+    ctx = JS_NewCustomContext(rt);
     if (dump_memory) {
         JSMemoryUsage stats;
         JS_ComputeMemoryUsage(rt, &stats);

@@ -3,19 +3,25 @@
 //
 
 // A simple program that computes the square root of a number
-#include <cmath>
-#include <cstdlib>
-#include <iostream>
+
 #include <string>
-#include "TutorialConfig.h"
 
 int main(int argc, char* argv[])
 {
-    if (argc < 2) {
-        // report version
-        std::cout << argv[0] << " Version " << Tutorial_VERSION_MAJOR << "."
-                  << Tutorial_VERSION_MINOR << std::endl;
-        std::cout << "Usage: " << argv[0] << " number" << std::endl;
-        return 1;
-    }
-}
+    int c, i, nwhite, nother;
+    int ndigit[10];
+    nwhite = nother = 0;
+    for (i = 0; i < 10; ++i)
+        ndigit[i] = 0;
+    while ((c = getchar()) != EOF)
+        if (c >= '0' && c <= '9')
+    ++ndigit[c-'0'];
+    else if (c == ' ' || c == '\n' || c == '\t')
+    ++nwhite;
+    else
+    ++nother;
+    printf("digits =");
+    for (i = 0; i < 10; ++i)
+        printf(" %d", ndigit[i]);
+    printf(", white space = %d, other = %d\n",
+           nwhite, nother);}

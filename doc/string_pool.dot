@@ -1,0 +1,54 @@
+digraph {
+	compound=true
+	fontname="Inconsolata, Consolas"
+	fontsize=10
+	margin="0,0"
+	ranksep=0.2
+	penwidth=0.5
+	graph [
+		rankdir = "TR"
+	];
+	node [fontname="Inconsolata, Consolas", fontsize=10, penwidth=0.5]
+	edge [fontname="Inconsolata, Consolas", fontsize=10]
+
+	subgraph cluster1 {
+		margin="10,10"
+		labeljust="left"
+		label = "string pool"
+		style=filled
+		fillcolor=gray95
+		node [shape=Mrecord, style=filled, colorscheme=spectral7]
+		
+		root [label="{atom_array}", fillcolor=3]
+
+		{			
+			NULL [label="{NULL}", fillcolor=5]
+			null [label="{JSString|\"null\"}", fillcolor=5]
+			false [label="{JSString|\"false\"}", fillcolor=5]
+			true [label="{JSString|\"true\"}", fillcolor=5]
+			0 [label="{int|5*2+1}", fillcolor=5]
+			1 [label="{JSString|...}", fillcolor=6]
+			end [label="{JSString|atom_size*2+1}", fillcolor=6]
+
+			atom_free_index [label="{atom_free_index|4}", fillcolor=6]
+
+			atom_array [
+			label="<f0> 0| <f1> 1| <f2> 2| <f3> 3| <f4> 4| <f5> ...| <f6> atom_size-1", 
+			shape="record"
+			];
+			"atom_array":f0 -> NULL[];
+			"atom_array":f1 -> null[];
+			"atom_array":f2 -> false[];
+			"atom_array":f3 -> true[];
+			"atom_array":f4 -> 0[];
+			"atom_array":f5 -> 1[];
+			"atom_array":f6 -> end[];
+		}
+
+
+
+		edge [arrowhead=vee]
+		root -> { atom_array }			
+	}
+}
+

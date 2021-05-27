@@ -6,31 +6,55 @@
 #define QJS_JSSTRING_H
 
 #include <qjs-runtime.h>
+#include "cutils.h"
+#include "quickjs-atom.h"
 
-typedef struct JSString JSString;
-typedef struct JSString JSAtomStruct;
 
-struct JSString {
-    JSRefCountHeader header; /* must come first, 32-bit */
-    uint32_t len : 31;
-    uint8_t is_wide_char : 1; /* 0 = 8 bits, 1 = 16 bits characters */
-    /* for JS_ATOM_TYPE_SYMBOL: hash = 0, atom_type = 3,
-       for JS_ATOM_TYPE_PRIVATE: hash = 1, atom_type = 3
-       XXX: could change encoding to have one more bit in hash */
-    uint32_t hash : 30;
-    uint8_t atom_type : 2; /* != 0 if atom, JS_ATOM_TYPE_x */
-    uint32_t hash_next; /* atom_index for JS_ATOM_TYPE_SYMBOL */
-
-    union {
-        uint8_t str8[0]; /* 8 bit strings will get an extra null terminator */
-        uint16_t str16[0];
-    } u;
+enum {
+    JS_ATOM_TYPE_STRING = 1,
+    JS_ATOM_TYPE_GLOBAL_SYMBOL,
+    JS_ATOM_TYPE_SYMBOL,
+    JS_ATOM_TYPE_PRIVATE,
 };
 
+enum {
+    JS_ATOM_HASH_SYMBOL,
+    JS_ATOM_HASH_PRIVATE,
+};
 
-/* Note: the string contents are uninitialized */
-static JSString *js_alloc_string_rt(JSRuntime *rt, int max_len, int is_wide_char);
+typedef enum {
+    JS_ATOM_KIND_STRING,
+    JS_ATOM_KIND_SYMBOL,
+    JS_ATOM_KIND_PRIVATE,
+} JSAtomKindEnum;
 
-static JSString *js_alloc_string(JSContext *ctx, int max_len, int is_wide_char);
+#define JS_ATOM_HASH_MASK  ((1 << 30) - 1)
+
+
+/* atom support */
+#define JS_ATOM_NULL 0
+
+enum {
+    __JS_ATOM_NULL = JS_ATOM_NULL,
+#define DEF(name, str) JS_ATOM_ ## name,
+#include "quickjs-atom.h"
+#undef DEF
+    JS_ATOM_END,
+};
+#define JS_ATOM_LAST_KEYWORD JS_ATOM_super
+#define JS_ATOM_LAST_STRICT_KEYWORD JS_ATOM_yield
+
+static const char js_atom_init[] =
+#define DEF(name, str) str "\0"
+#include "quickjs-atom.h"
+#undef DEF
+;
+int
+JS_InitAtoms(JSRuntime *rt);
+
+void JS_DumpString(JSRuntime *rt,
+                   const JSString *p);
+
+void test_dump_str(JSContext *ctx);
 
 #endif //QJS_JSSTRING_H
