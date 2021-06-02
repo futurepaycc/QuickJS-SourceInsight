@@ -26,9 +26,9 @@ digraph {
 			null [label="{JSString|\"null\"}", fillcolor=5]
 			false [label="{JSString|\"false\"}", fillcolor=5]
 			true [label="{JSString|\"true\"}", fillcolor=5]
-			0 [label="{int|5*2+1}", fillcolor=5]
-			1 [label="{JSString|...}", fillcolor=6]
-			end [label="{JSString|atom_size*2+1}", fillcolor=6]
+			0 [label="{int|(5\<\<1)\|1}", fillcolor=5]
+			1 [label="{int|...}", fillcolor=6]
+			end [label="{int|(0\<\<1)\|1}", fillcolor=6]
 
 			atom_free_index [label="{atom_free_index|4}", fillcolor=6]
 
@@ -43,6 +43,7 @@ digraph {
 			"atom_array":f4 -> 0[];
 			"atom_array":f5 -> 1[];
 			"atom_array":f6 -> end[];
+			"atom_free_index"->"atom_array":f4[];
 		}
 
 

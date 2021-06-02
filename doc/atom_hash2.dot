@@ -1,0 +1,76 @@
+digraph {
+	compound=true
+	fontname="Inconsolata, Consolas"
+	fontsize=10
+	margin="0,0"
+	ranksep=0.2
+	penwidth=0.5
+	graph [
+		rankdir = "TB"
+	];
+	node [fontname="Inconsolata, Consolas", fontsize=10, penwidth=0.5]
+	edge [fontname="Inconsolata, Consolas", fontsize=10]
+
+	subgraph cluster1 {
+		margin="10,10"
+		labeljust="left"
+		label = "QuickJS"
+		style=filled
+		fillcolor=gray95
+		node [shape=Mrecord, style=filled, colorscheme=spectral7]
+		
+		root [label="{JSRuntime}", fillcolor=3]
+
+		{			
+			NULL [label="{NULL}", fillcolor=5]
+			null [label="{JSString|\"null\"}", fillcolor=5]
+			false [label="{JSString|\"false\"|<f2>hash|<f3>hash_next}", fillcolor=5]
+			eslaf [label="{JSString|\"eslaf\"|<f2>hash|<f3>hash_next}", fillcolor=5]
+			0 [label="{int|(5\<\<1)\|1}", fillcolor=5]
+			1 [label="{int|(index\<\<1)\|1}", fillcolor=6]
+			end [label="{int|(0\<\<1)\|1}", fillcolor=6]
+
+			atom_free_index [label="{atom_free_index|3}", fillcolor=6]
+
+			atom_array [
+			label="<f0> 0| <f1> 1| <f2> 2| <f3> 3| <f4> 4| <f5> ...| <f6> atom_size-1", 
+			shape="record"
+			];
+			"atom_array":f0 -> NULL[];
+			"atom_array":f1 -> null[];
+			"atom_array":f2 -> false[];
+			"atom_array":f3 -> eslaf[];
+			"atom_array":f4 -> 0[];
+			"atom_array":f5 -> 1[];
+			"atom_array":f6 -> end[];
+			"atom_free_index"->"atom_array":f3[];
+
+
+			atom_hash [
+			label="<f0> 0| <f1> 1| <f2> ...| <f3> h1| <f4> 4| <f5> ...| <f6> 255", 
+			shape="record"
+			];
+
+
+            hash_string [shape=ellipse,fillcolor=brown1];
+            "false":f2 -> hash_string[];
+            "eslaf":f2 -> hash_string[]
+			"false":f3 -> "atom_array":f0[];
+            "eslaf":f3 -> "atom_array":f2[];
+            hash_string -> "atom_hash":f3[];
+
+            rt [label="{JSRuntime|<f1>atom_hash|<f2>atom_array}"];
+            "rt":f1->atom_hash[];
+            "rt":f2->atom_array[];
+
+            i [label="{int|<f1>2}", fillcolor=5];
+            "atom_hash":f3 -> i[];
+            "i":f1 -> "atom_array":f2[];
+		}
+
+
+
+		edge [arrowhead=vee]
+		root -> { rt }			
+	}
+}
