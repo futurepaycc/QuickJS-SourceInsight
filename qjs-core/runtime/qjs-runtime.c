@@ -6,6 +6,7 @@
 #include "jmemory.h"
 #include "list.h"
 #include <stdio.h>
+#include <quickjs.h>
 #include "jsstring.h"
 
 static size_t js_malloc_usable_size_unknown(const void *ptr)
@@ -17,6 +18,13 @@ void *js_malloc_rt(JSRuntime *rt, size_t size)
 {
     return rt->mf.js_malloc(&rt->malloc_state, size);
 }
+
+
+void js_free(JSContext *ctx, void *ptr)
+{
+    js_free_rt(ctx->rt, ptr);
+}
+
 
 void js_free_rt(JSRuntime *rt, void *ptr)
 {
@@ -129,4 +137,18 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt) {
                 MALLOC_OVERHEAD, ((double)(s->malloc_size - s->memory_used_size) /
                                   s->memory_used_count));
     }
+}
+
+
+JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
+                const char *filename, int eval_flags)
+{
+    int eval_type = eval_flags & JS_EVAL_TYPE_MASK;
+    JSValue ret;
+
+    assert(eval_type == JS_EVAL_TYPE_GLOBAL ||
+           eval_type == JS_EVAL_TYPE_MODULE);
+    ret = JS_EvalInternal(ctx, ctx->global_obj, input, input_len, filename,
+                          eval_flags, -1);
+    return ret;
 }

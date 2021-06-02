@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "list.h"
+#include "jsvalue.h"
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -23,9 +24,6 @@ typedef struct JSMallocFunctions {
     size_t (*js_malloc_usable_size)(const void *ptr);
 } JSMallocFunctions;
 
-typedef struct JSRefCountHeader {
-    int ref_count;
-} JSRefCountHeader;
 
 typedef enum {
     JS_GC_OBJ_TYPE_JS_OBJECT,
@@ -49,8 +47,7 @@ struct JSGCObjectHeader {
 };
 
 typedef struct JSGCObjectHeader JSGCObjectHeader;
-typedef struct JSRuntime JSRuntime;
-typedef struct JSContext JSContext;
+
 typedef uint32_t JSClassID;
 typedef uint32_t JSAtom;
 
@@ -128,6 +125,13 @@ size_t js_malloc_usable_size_rt(JSRuntime *rt, const void *ptr);
 void *js_mallocz_rt(JSRuntime *rt, size_t size);
 
 JSContext *JS_NewCustomContext(JSRuntime *rt);
+
+void *js_malloc(JSContext *ctx, size_t size);
+void js_free(JSContext *ctx, void *ptr);
+
+/* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
+JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
+                const char *filename, int eval_flags);
 
 
 struct JSString {
