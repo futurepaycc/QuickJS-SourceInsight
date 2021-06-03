@@ -9,6 +9,10 @@
 #include <quickjs.h>
 #include "jsstring.h"
 
+static JSValue JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
+                               const char *input, size_t input_len,
+                               const char *filename, int flags, int scope_idx);
+
 static size_t js_malloc_usable_size_unknown(const void *ptr)
 {
     return 0;
@@ -152,3 +156,13 @@ JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
                           eval_flags, -1);
     return ret;
 }
+
+/* the indirection is needed to make 'eval' optional */
+static JSValue JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
+                               const char *input, size_t input_len,
+                               const char *filename, int flags, int scope_idx)
+{
+    return ctx->eval_internal(ctx, this_obj, input, input_len, filename,
+                              flags, scope_idx);
+}
+

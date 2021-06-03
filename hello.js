@@ -1,1 +1,1 @@
-console.log("hello word!");
+var a = 1;

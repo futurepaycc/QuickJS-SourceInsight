@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "list.h"
 #include "jsvalue.h"
+#include "quickjs.h"
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -75,6 +76,30 @@ typedef struct JSContext {
     JSGCObjectHeader header; /* must come first */
     JSRuntime *rt;
     struct list_head link;
+
+    JSValue *class_proto;
+    JSValue function_proto;
+    JSValue function_ctor;
+    JSValue array_ctor;
+    JSValue regexp_ctor;
+    JSValue promise_ctor;
+    JSValue native_error_proto[JS_NATIVE_ERROR_COUNT];
+    JSValue iterator_proto;
+    JSValue async_iterator_proto;
+    JSValue array_proto_values;
+    JSValue throw_type_error;
+    JSValue eval_obj;
+
+    JSValue global_obj; /* global object */
+    JSValue global_var_obj; /* contains the global let/const definitions */
+
+    uint64_t random_state;
+
+    /* if NULL, eval is not supported */
+    JSValue (*eval_internal)(JSContext *ctx, JSValueConst this_obj,
+                             const char *input, size_t input_len,
+                             const char *filename, int flags, int scope_idx);
+    void *user_opaque;
 } JSContext;
 
 
