@@ -24,6 +24,18 @@ void *js_malloc_rt(JSRuntime *rt, size_t size)
 }
 
 
+/* Throw out of memory in case of error */
+void *js_malloc(JSContext *ctx, size_t size)
+{
+    void *ptr;
+    ptr = js_malloc_rt(ctx->rt, size);
+    if (unlikely(!ptr)) {
+
+        return NULL;
+    }
+    return ptr;
+}
+
 void js_free(JSContext *ctx, void *ptr)
 {
     js_free_rt(ctx->rt, ptr);

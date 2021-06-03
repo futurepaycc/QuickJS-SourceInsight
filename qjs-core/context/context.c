@@ -13,6 +13,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
 {
     int err, js_mode, eval_type;
     JSValue fun_obj, ret_val;
+    printf("input: %s", input);
     return ret_val;
     fail1:
     return JS_EXCEPTION;

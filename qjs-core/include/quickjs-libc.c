@@ -3,7 +3,10 @@
 //
 
 #include "quickjs-libc.h"
-
+#include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <limits.h>
 
 
 uint8_t *js_load_file(JSContext *ctx, size_t *pbuf_len, const char *filename)

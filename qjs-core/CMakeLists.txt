@@ -26,6 +26,7 @@ set(INCLUDE_CORE_PRIVATE ${INCLUDE_CORE_PRIVATE} PARENT_SCOPE) # for tests/unit-
 
 set(SOURCE_CORE_FILES
         include/qjs.c
+        include/quickjs-libc.c
         string/jsstring.c
         runtime/qjs-runtime.c
         context/context.c
