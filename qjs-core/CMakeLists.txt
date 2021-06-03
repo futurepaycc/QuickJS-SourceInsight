@@ -29,7 +29,7 @@ set(SOURCE_CORE_FILES
         include/quickjs-libc.c
         string/jsstring.c
         runtime/qjs-runtime.c
-        context/context.c
+        runtime/qjs-parser.c
         utils/cutils.c
         memory/gc.c
         memory/jmemory.c)

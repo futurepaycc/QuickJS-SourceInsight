@@ -7,9 +7,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <cutils.h>
 #include "list.h"
 #include "jsvalue.h"
 #include "quickjs.h"
+#define __exception __attribute__((warn_unused_result))
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -175,5 +177,38 @@ struct JSString {
         uint16_t str16[0];
     } u;
 };
+
+typedef struct JSFunctionDef {
+    JSContext *ctx;
+    struct JSFunctionDef *parent;
+    int parent_cpool_idx; /* index in the constant pool of the parent
+                             or -1 if none */
+    int parent_scope_level; /* scope level in parent at point of definition */
+    struct list_head child_list; /* list of JSFunctionDef.link */
+    struct list_head link;
+
+    BOOL is_eval; /* TRUE if eval code */
+    int eval_type; /* only valid if is_eval = TRUE */
+    BOOL is_global_var; /* TRUE if variables are not defined locally:
+                           eval global, eval module or non strict eval */
+    BOOL is_func_expr; /* TRUE if function expression */
+    BOOL has_home_object; /* TRUE if the home object is available */
+    BOOL has_prototype; /* true if a prototype field is necessary */
+    BOOL has_simple_parameter_list;
+    BOOL has_use_strict; /* to reject directive in special cases */
+    BOOL has_eval_call; /* true if the function contains a call to eval() */
+    BOOL has_arguments_binding; /* true if the 'arguments' binding is
+                                   available in the function */
+    BOOL has_this_binding; /* true if the 'this' and new.target binding are
+                              available in the function */
+    BOOL new_target_allowed; /* true if the 'new.target' does not
+                                throw a syntax error */
+    BOOL super_call_allowed; /* true if super() is allowed */
+    BOOL super_allowed; /* true if super. or super[] is allowed */
+    BOOL arguments_allowed; /* true if the 'arguments' identifier is allowed */
+    BOOL is_derived_class_constructor;
+    BOOL in_function_body;
+    BOOL backtrace_barrier;
+} JSFunctionDef;
 
 #endif //QJS_JRUNTEIM_H
