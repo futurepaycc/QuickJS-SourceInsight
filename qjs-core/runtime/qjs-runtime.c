@@ -9,7 +9,7 @@
 #include <quickjs.h>
 #include "jsstring.h"
 
-#include "qjs-parser.h"
+#include "parser/scanner.h"
 
 
 

@@ -211,4 +211,29 @@ typedef struct JSFunctionDef {
     BOOL backtrace_barrier;
 } JSFunctionDef;
 
+#if !defined(CONFIG_STACK_CHECK)
+/* no stack limitation */
+static inline uint8_t *js_get_stack_pointer(void)
+{
+    return NULL;
+}
+
+static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
+{
+    return FALSE;
+}
+#else
+/* Note: OS and CPU dependent */
+inline uint8_t *js_get_stack_pointer(void)
+{
+    return __builtin_frame_address(0);
+}
+
+inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
+{
+    size_t size;
+    size = rt->stack_top - js_get_stack_pointer();
+    return unlikely((size + alloca_size) > rt->stack_size);
+}
+#endif
 #endif //QJS_JRUNTEIM_H

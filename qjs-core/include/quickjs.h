@@ -25,4 +25,6 @@ typedef enum JSErrorEnum {
 
     JS_NATIVE_ERROR_COUNT, /* number of different NativeError objects */
 } JSErrorEnum;
+
+
 #endif //TUTORIAL_QUICKJS_H

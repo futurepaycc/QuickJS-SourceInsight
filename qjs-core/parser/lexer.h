@@ -1,12 +1,11 @@
 //
-// Created by benpeng.jiang on 2021/6/3.
+// Created by benpeng.jiang on 2021/6/7.
 //
 
-#ifndef TUTORIAL_QJS_PARSER_H
-#define TUTORIAL_QJS_PARSER_H
-#include "qjs-runtime.h"
-
+#ifndef TUTORIAL_LEXER_H
+#define TUTORIAL_LEXER_H
 /* JS parser */
+#include "jsvalue.h"
 
 enum {
     TOK_NUMBER = -128,
@@ -145,28 +144,6 @@ typedef struct JSToken {
     } u;
 } JSToken;
 
-typedef struct JSParseState {
-    JSContext *ctx;
-    int last_line_num;  /* line number of last token */
-    int line_num;       /* line number of current offset */
-    const char *filename;
-    JSToken token;
-    BOOL got_lf; /* true if got line feed before the current token */
-    const uint8_t *last_ptr;
-    const uint8_t *buf_ptr;
-    const uint8_t *buf_end;
-
-    /* current function code */
-    JSFunctionDef *cur_func;
-    BOOL is_module; /* parsing a module */
-    BOOL allow_html_comments;
-    BOOL ext_json; /* true if accepting JSON superset */
-} JSParseState;
 
 
-void js_parse_init(JSContext *ctx, JSParseState *s,
-                   const char *input, size_t input_len,
-                   const char *filename);
-
-int js_parse_program(JSParseState *s);
-#endif //TUTORIAL_QJS_PARSER_H
+#endif //TUTORIAL_LEXER_H

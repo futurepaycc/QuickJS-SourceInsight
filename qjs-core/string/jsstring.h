@@ -57,4 +57,10 @@ void JS_DumpString(JSRuntime *rt,
 
 void test_dump_str(JSContext *ctx);
 
+#define ATOM_GET_STR_BUF_SIZE 64
+
+
+const char *JS_AtomGetStrRT(JSRuntime *rt, char *buf, int buf_size,
+                            JSAtom atom);
+const char *JS_AtomGetStr(JSContext *ctx, char *buf, int buf_size, JSAtom atom);
 #endif //QJS_JSSTRING_H

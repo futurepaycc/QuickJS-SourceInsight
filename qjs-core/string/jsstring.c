@@ -640,3 +640,59 @@ void test_dump_str(JSContext *ctx) {
     dump_atom_array(ctx->rt);
 }
 
+/* Should only be used for debug. */
+const char *JS_AtomGetStrRT(JSRuntime *rt, char *buf, int buf_size,
+                                   JSAtom atom)
+{
+    if (__JS_AtomIsTaggedInt(atom)) {
+        snprintf(buf, buf_size, "%u", __JS_AtomToUInt32(atom));
+    } else {
+        JSAtomStruct *p;
+        assert(atom < rt->atom_size);
+        if (atom == JS_ATOM_NULL) {
+            snprintf(buf, buf_size, "<null>");
+        } else {
+            int i, c;
+            char *q;
+            JSString *str;
+
+            q = buf;
+            p = rt->atom_array[atom];
+            assert(!atom_is_free(p));
+            str = p;
+            if (str) {
+                if (!str->is_wide_char) {
+                    /* special case ASCII strings */
+                    c = 0;
+                    for(i = 0; i < str->len; i++) {
+                        c |= str->u.str8[i];
+                    }
+                    if (c < 0x80)
+                        return (const char *)str->u.str8;
+                }
+                for(i = 0; i < str->len; i++) {
+                    if (str->is_wide_char)
+                        c = str->u.str16[i];
+                    else
+                        c = str->u.str8[i];
+                    if ((q - buf) >= buf_size - UTF8_CHAR_LEN_MAX)
+                        break;
+                    if (c < 128) {
+                        *q++ = c;
+                    } else {
+                        q += unicode_to_utf8((uint8_t *)q, c);
+                    }
+                }
+            }
+            *q = '\0';
+        }
+    }
+    return buf;
+}
+
+const char *JS_AtomGetStr(JSContext *ctx, char *buf, int buf_size, JSAtom atom)
+{
+    return JS_AtomGetStrRT(ctx->rt, buf, buf_size, atom);
+}
+
+

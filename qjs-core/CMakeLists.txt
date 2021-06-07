@@ -14,6 +14,7 @@ add_compile_definitions(CONFIG_ATOMICS=1)
 set(INCLUDE_CORE_PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(INCLUDE_CORE_PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/parser"
         "${CMAKE_CURRENT_SOURCE_DIR}/context"
         "${CMAKE_CURRENT_SOURCE_DIR}/runtime"
         "${CMAKE_CURRENT_SOURCE_DIR}/utils"
@@ -29,10 +30,10 @@ set(SOURCE_CORE_FILES
         include/quickjs-libc.c
         string/jsstring.c
         runtime/qjs-runtime.c
-        runtime/qjs-parser.c
+        parser/scanner.c
         utils/cutils.c
         memory/gc.c
-        memory/jmemory.c)
+        memory/jmemory.c jcontext/jcontext.c jcontext/jcontext.h parser/jsdump.c parser/jsdump.h)
 
 
 add_library(${QJS_CORE_NAME} ${SOURCE_CORE_FILES})
