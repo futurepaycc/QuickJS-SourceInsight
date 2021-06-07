@@ -8,6 +8,7 @@
 #include <qjs-runtime.h>
 #include "cutils.h"
 #include "quickjs-atom.h"
+#include "quickjs.h"
 
 
 enum {

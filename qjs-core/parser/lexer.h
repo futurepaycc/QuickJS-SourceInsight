@@ -5,7 +5,7 @@
 #ifndef TUTORIAL_LEXER_H
 #define TUTORIAL_LEXER_H
 /* JS parser */
-#include "jsvalue.h"
+#include "quickjs.h"
 
 enum {
     TOK_NUMBER = -128,

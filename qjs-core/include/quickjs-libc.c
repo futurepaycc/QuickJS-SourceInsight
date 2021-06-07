@@ -2,7 +2,7 @@
 // Created by benpeng.jiang on 2021/6/2.
 //
 
-#include "quickjs-libc.h"
+#include "quickjs.h"
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>

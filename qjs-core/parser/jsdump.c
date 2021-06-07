@@ -5,10 +5,16 @@
 #include "jsdump.h"
 #include "jsstring.h"
 
-void __attribute((unused)) dump_token(JSParseState *s,
-                                      const JSToken *token) {
-    switch (token->val) {
+ void __attribute((unused)) dump_token(JSParseState *s,
+                                             const JSToken *token)
+{
+    switch(token->val) {
         case TOK_NUMBER:
+        {
+            double d;
+            JS_ToFloat64(s->ctx, &d, token->u.num.val);  /* no exception possible */
+            printf("number: %.14g\n", d);
+        }
             break;
         case TOK_IDENT:
         dump_atom:

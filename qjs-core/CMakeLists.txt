@@ -26,6 +26,7 @@ set(INCLUDE_CORE_PUBLIC ${INCLUDE_CORE_PUBLIC} PARENT_SCOPE) # for qjs-port
 set(INCLUDE_CORE_PRIVATE ${INCLUDE_CORE_PRIVATE} PARENT_SCOPE) # for tests/unit-core
 
 set(SOURCE_CORE_FILES
+        api/quickjs.c
         include/qjs.c
         include/quickjs-libc.c
         string/jsstring.c

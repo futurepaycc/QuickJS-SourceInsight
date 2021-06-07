@@ -9,9 +9,7 @@
 #include <stdint.h>
 #include <cutils.h>
 #include "list.h"
-#include "jsvalue.h"
 #include "quickjs.h"
-#define __exception __attribute__((warn_unused_result))
 
 typedef struct JSMallocState {
     size_t malloc_count;
@@ -153,8 +151,6 @@ void *js_mallocz_rt(JSRuntime *rt, size_t size);
 
 JSContext *JS_NewCustomContext(JSRuntime *rt);
 
-void *js_malloc(JSContext *ctx, size_t size);
-void js_free(JSContext *ctx, void *ptr);
 
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,

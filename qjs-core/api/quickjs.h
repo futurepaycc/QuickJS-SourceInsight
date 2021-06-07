@@ -2,14 +2,29 @@
 // Created by benpeng.jiang on 2021/6/2.
 //
 
-#ifndef TUTORIAL_JSVALUE_H
-#define TUTORIAL_JSVALUE_H
+#ifndef TUTORIAL_QUICKJS_H
+#define TUTORIAL_QUICKJS_H
+
+#include <stdio.h>
+#include <stdint.h>
 
 #if INTPTR_MAX >= INT64_MAX
 #define JS_PTR64
 #define JS_PTR64_DEF(a) a
 #else
 #define JS_PTR64_DEF(a)
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#define js_likely(x)          __builtin_expect(!!(x), 1)
+#define js_unlikely(x)        __builtin_expect(!!(x), 0)
+#define js_force_inline       inline __attribute__((always_inline))
+#define __js_printf_like(f, a)   __attribute__((format(printf, f, a)))
+#else
+#define js_likely(x)     (x)
+#define js_unlikely(x)   (x)
+#define js_force_inline  inline
+#define __js_printf_like(a, b)
 #endif
 
 #ifndef JS_PTR64
@@ -220,4 +235,127 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 #define JS_TRUE      JS_MKVAL(JS_TAG_BOOL, 1)
 #define JS_EXCEPTION JS_MKVAL(JS_TAG_EXCEPTION, 0)
 #define JS_UNINITIALIZED JS_MKVAL(JS_TAG_UNINITIALIZED, 0)
-#endif //TUTORIAL_JSVALUE_H
+
+/* JS_Eval() flags */
+#define JS_EVAL_TYPE_GLOBAL   (0 << 0) /* global code (default) */
+#define JS_EVAL_TYPE_MODULE   (1 << 0) /* module code */
+#define JS_EVAL_TYPE_DIRECT   (2 << 0) /* direct call (internal use) */
+#define JS_EVAL_TYPE_INDIRECT (3 << 0) /* indirect call (internal use) */
+#define JS_EVAL_TYPE_MASK     (3 << 0)
+
+
+typedef enum JSErrorEnum {
+    JS_EVAL_ERROR,
+    JS_RANGE_ERROR,
+    JS_REFERENCE_ERROR,
+    JS_SYNTAX_ERROR,
+    JS_TYPE_ERROR,
+    JS_URI_ERROR,
+    JS_INTERNAL_ERROR,
+    JS_AGGREGATE_ERROR,
+
+    JS_NATIVE_ERROR_COUNT, /* number of different NativeError objects */
+} JSErrorEnum;
+
+int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
+int JS_ToInt32(JSContext *ctx, int32_t *pres, JSValueConst val);
+static inline int JS_ToUint32(JSContext *ctx, uint32_t *pres, JSValueConst val)
+{
+    return JS_ToInt32(ctx, (int32_t*)pres, val);
+}
+int JS_ToInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
+int JS_ToIndex(JSContext *ctx, uint64_t *plen, JSValueConst val);
+int JS_ToFloat64(JSContext *ctx, double *pres, JSValueConst val);
+/* return an exception if 'val' is a Number */
+int JS_ToBigInt64(JSContext *ctx, int64_t *pres, JSValueConst val);
+/* same as JS_ToInt64() but allow BigInt */
+int JS_ToInt64Ext(JSContext *ctx, int64_t *pres, JSValueConst val);
+
+
+static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
+{
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        p->ref_count++;
+    }
+    return (JSValue)v;
+}
+
+const char *JS_ToCStringLen2(JSContext *ctx, size_t *plen, JSValueConst val1, JS_BOOL cesu8);
+
+static inline const char *JS_ToCStringLen(JSContext *ctx, size_t *plen, JSValueConst val1)
+{
+    return JS_ToCStringLen2(ctx, plen, val1, 0);
+}
+static inline const char *JS_ToCString(JSContext *ctx, JSValueConst val1)
+{
+    return JS_ToCStringLen2(ctx, NULL, val1, 0);
+}
+void JS_FreeCString(JSContext *ctx, const char *ptr);
+
+void *js_malloc(JSContext *ctx, size_t size);
+void js_free(JSContext *ctx, void *ptr);
+
+#define __exception __attribute__((warn_unused_result))
+
+static inline JS_BOOL JS_IsNumber(JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
+}
+
+static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_BIG_INT;
+}
+
+static inline JS_BOOL JS_IsBigFloat(JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_BIG_FLOAT;
+}
+
+static inline JS_BOOL JS_IsBigDecimal(JSValueConst v)
+{
+    int tag = JS_VALUE_GET_TAG(v);
+    return tag == JS_TAG_BIG_DECIMAL;
+}
+
+static inline JS_BOOL JS_IsBool(JSValueConst v)
+{
+    return JS_VALUE_GET_TAG(v) == JS_TAG_BOOL;
+}
+
+static inline JS_BOOL JS_IsNull(JSValueConst v)
+{
+    return JS_VALUE_GET_TAG(v) == JS_TAG_NULL;
+}
+
+static inline JS_BOOL JS_IsUndefined(JSValueConst v)
+{
+    return JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
+}
+
+static inline JS_BOOL JS_IsException(JSValueConst v)
+{
+    return js_unlikely(JS_VALUE_GET_TAG(v) == JS_TAG_EXCEPTION);
+}
+
+JSValue JS_ThrowOutOfMemory(JSContext *ctx);
+
+void __JS_FreeValue(JSContext *ctx, JSValue v);
+
+static inline void JS_FreeValue(JSContext *ctx, JSValue v)
+{
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        if (--p->ref_count <= 0) {
+            __JS_FreeValue(ctx, v);
+        }
+    }
+}
+
+JSValue JS_NewStringLen(JSContext *ctx, const char *str1, size_t len1);
+JSValue JS_NewString(JSContext *ctx, const char *str);
+#endif //TUTORIAL_QUICKJS_H

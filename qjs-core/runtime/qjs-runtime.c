@@ -77,28 +77,11 @@ static size_t js_malloc_usable_size_unknown(const void *ptr)
     return 0;
 }
 
-void *js_malloc_rt(JSRuntime *rt, size_t size)
-{
-    return rt->mf.js_malloc(&rt->malloc_state, size);
-}
 
 
-/* Throw out of memory in case of error */
-void *js_malloc(JSContext *ctx, size_t size)
-{
-    void *ptr;
-    ptr = js_malloc_rt(ctx->rt, size);
-    if (unlikely(!ptr)) {
 
-        return NULL;
-    }
-    return ptr;
-}
 
-void js_free(JSContext *ctx, void *ptr)
-{
-    js_free_rt(ctx->rt, ptr);
-}
+
 
 
 void js_free_rt(JSRuntime *rt, void *ptr)
