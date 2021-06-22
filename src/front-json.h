@@ -4,9 +4,8 @@
 
 #ifndef LOX_JS_FRONT_JSON_H
 #define LOX_JS_FRONT_JSON_H
-#include "qjs-api.h"
 #include "qjs-string.h"
-
+#include "front-lexer.h"
 
 
 #endif //LOX_JS_FRONT_JSON_H
