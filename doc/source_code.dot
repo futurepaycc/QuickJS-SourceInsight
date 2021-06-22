@@ -1,0 +1,32 @@
+digraph {
+	compound=true
+	fontname="Inconsolata, Consolas"
+	fontsize=10
+	margin="0,0"
+	ranksep=0.2
+	penwidth=0.5
+	graph [
+		rankdir = "TB"
+	];
+	node [fontname="Inconsolata, Consolas", fontsize=10, penwidth=0.5]
+	edge [fontname="Inconsolata, Consolas", fontsize=10]
+
+    StringBuffer [label="StringBuffer | <f1>str",
+                    shape="record"];
+
+    parseState [
+        label="<f0> str8|<f1> str16",
+        shape="record"
+    ];
+    "StringBuffer":f1 -> parseState;
+    		
+    atom_array [
+    label="<f0>0x71|<f1>0x75|<f2>0x69|<f3>0x63|<f5>0x6b|<f6>0x6a|<f7>0x73", 
+    shape="record"
+    ];
+
+    "parseState":f0->"atom_array":f0;
+    "parseState":f1->"null"
+      
+    edge [arrowhead=vee]
+}

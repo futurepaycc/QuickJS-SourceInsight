@@ -167,32 +167,14 @@ typedef struct JSParseState {
     BOOL ext_json; /* true if accepting JSON superset */
 } JSParseState;
 
-int js_parse_expect(JSParseState *s, int tok);
-
-__exception int next_token(JSParseState *s);
-
-void free_token(JSParseState *s, JSToken *token);
-
-void __attribute((unused)) dump_token(JSParseState *s,
-                                      const JSToken *token);
-
-int __attribute__((format(printf, 2, 3))) js_parse_error(JSParseState *s, const char *fmt, ...);
-
-__exception int ident_realloc(JSContext *ctx, char **pbuf, size_t *psize,
-                              char *static_buf);
-
-__exception int js_parse_string(JSParseState *s, int sep,
-                                BOOL do_throw, const uint8_t *p,
-                                JSToken *token, const uint8_t **pp);
 
 void js_parse_init(JSContext *ctx, JSParseState *s,
                    const char *input, size_t input_len,
                    const char *filename);
 
-int js_parse_expect_semi(JSParseState *s);
+void free_token(JSParseState *s, JSToken *token);
 
-int js_parse_error_reserved_identifier(JSParseState *s);
-
-__exception int js_parse_template_part(JSParseState *s, const uint8_t *p);
+void __attribute((unused)) dump_token(JSParseState *s,
+                                      const JSToken *token);
 
 #endif //LOX_JS_FRONT_TOKEN_H

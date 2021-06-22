@@ -1,1 +1,1 @@
-console.log("quickjs好");
+print('\0f99');
