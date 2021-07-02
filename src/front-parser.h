@@ -5,7 +5,7 @@
 #ifndef LOX_JS_FRONT_PARSER_H
 #define LOX_JS_FRONT_PARSER_H
 
-#include "front.h"
+#include "qjs-front.h"
 
 __exception int js_parse_expr(JSParseState *s);
 
