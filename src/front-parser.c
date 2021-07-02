@@ -146,5 +146,102 @@ __exception int js_parse_template(JSParseState *s, int call, int *argc)
 }
 
 
+__exception int js_parse_regexp(JSParseState *s)
+{
+    const uint8_t *p;
+    BOOL in_class;
+    StringBuffer b_s, *b = &b_s;
+    StringBuffer b2_s, *b2 = &b2_s;
+    uint32_t c;
+
+    p = s->buf_ptr;
+    p++;
+    in_class = FALSE;
+    if (string_buffer_init(s->ctx, b, 32))
+        return -1;
+    if (string_buffer_init(s->ctx, b2, 1))
+        goto fail;
+    for(;;) {
+        if (p >= s->buf_end) {
+            eof_error:
+            js_parse_error(s, "unexpected end of regexp");
+            goto fail;
+        }
+        c = *p++;
+        if (c == '\n' || c == '\r') {
+            goto eol_error;
+        } else if (c == '/') {
+            if (!in_class)
+                break;
+        } else if (c == '[') {
+            in_class = TRUE;
+        } else if (c == ']') {
+            /* XXX: incorrect as the first character in a class */
+            in_class = FALSE;
+        } else if (c == '\\') {
+            if (string_buffer_putc8(b, c))
+                goto fail;
+            c = *p++;
+            if (c == '\n' || c == '\r')
+                goto eol_error;
+            else if (c == '\0' && p >= s->buf_end)
+                goto eof_error;
+            else if (c >= 0x80) {
+                const uint8_t *p_next;
+                c = unicode_from_utf8(p - 1, UTF8_CHAR_LEN_MAX, &p_next);
+                if (c > 0x10FFFF) {
+                    goto invalid_utf8;
+                }
+                p = p_next;
+                if (c == CP_LS || c == CP_PS)
+                    goto eol_error;
+            }
+        } else if (c >= 0x80) {
+            const uint8_t *p_next;
+            c = unicode_from_utf8(p - 1, UTF8_CHAR_LEN_MAX, &p_next);
+            if (c > 0x10FFFF) {
+                invalid_utf8:
+                js_parse_error(s, "invalid UTF-8 sequence");
+                goto fail;
+            }
+            p = p_next;
+            /* LS or PS are considered as line terminator */
+            if (c == CP_LS || c == CP_PS) {
+                eol_error:
+                js_parse_error(s, "unexpected line terminator in regexp");
+                goto fail;
+            }
+        }
+        if (string_buffer_putc(b, c))
+            goto fail;
+    }
+
+    /* flags */
+    for(;;) {
+        const uint8_t *p_next = p;
+        c = *p_next++;
+        if (c >= 0x80) {
+            c = unicode_from_utf8(p, UTF8_CHAR_LEN_MAX, &p_next);
+            if (c > 0x10FFFF) {
+                goto invalid_utf8;
+            }
+        }
+        if (!lre_js_is_ident_next(c))
+            break;
+        if (string_buffer_putc(b2, c))
+            goto fail;
+        p = p_next;
+    }
+
+    s->token.val = TOK_REGEXP;
+    s->token.u.regexp.body = string_buffer_end(b);
+    s->token.u.regexp.flags = string_buffer_end(b2);
+    s->buf_ptr = p;
+    return 0;
+    fail:
+    string_buffer_free(b);
+    string_buffer_free(b2);
+    return -1;
+}
 
 

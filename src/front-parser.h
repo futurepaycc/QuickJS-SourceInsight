@@ -9,6 +9,7 @@
 
 __exception int js_parse_expr(JSParseState *s);
 
+__exception int js_parse_regexp(JSParseState *s);
 
 __exception int js_parse_template(JSParseState *s, int call, int *argc);
 

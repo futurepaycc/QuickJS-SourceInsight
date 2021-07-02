@@ -1,1 +1,1 @@
-var a = null;
+var re = /ab+c/;
