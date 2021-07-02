@@ -1,0 +1,19 @@
+	rankdir=LR;
+	size="8,5"
+	node [shape = point]; addon_init;
+	node [shape = circle]; check_sku addon_op OA OB;
+	node [shape = doublecircle]; addon_error addon_end;
+
+	addon_init -> check_sku [label = "check_sku"];
+	check_sku -> addon_op [label = "addon"];
+	check_sku -> addon_error [label ="error"]; 
+
+	addon_op -> {OA, OB} [label = "addon_next"];
+	addon_op -> addon_error [label = "error"];
+
+	OA -> addon_end [label = "addon_end"];
+	OB -> addon_end [label = "addon_end"];
+
+	OA -> addon_error [label = "error"];
+	OB -> addon_error [label = "error"];
+    }

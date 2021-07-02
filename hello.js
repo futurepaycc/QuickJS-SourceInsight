@@ -1,1 +1,1 @@
-print('\0f99');
+var a = null;

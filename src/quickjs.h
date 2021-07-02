@@ -33,5 +33,5 @@
 #include "qjs-gc.h"
 #include "ecma-object.h"
 #include "qjs-closure.h"
-#include "front.h"
+#include "ir.h"
 #endif /* QUICKJS_H */

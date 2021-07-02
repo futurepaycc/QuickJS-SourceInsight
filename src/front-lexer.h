@@ -17,7 +17,6 @@ __exception int js_parse_string(JSParseState *s, int sep,
                                 JSToken *token, const uint8_t **pp);
 
 
-
 int js_parse_expect_semi(JSParseState *s);
 
 int js_parse_error_reserved_identifier(JSParseState *s);

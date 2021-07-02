@@ -4,7 +4,6 @@
 
 #include "front-token.h"
 #include "qjs-atom.h"
-#include <stdarg.h>
 
 
 void js_parse_init(JSContext *ctx, JSParseState *s,
