@@ -244,4 +244,34 @@ __exception int js_parse_regexp(JSParseState *s)
     return -1;
 }
 
+__exception int js_parse_expr(JSParseState *s)
+{
+    return js_parse_expr2(s, PF_IN_ACCEPTED);
+}
+
+/* allowed parse_flags: PF_IN_ACCEPTED */
+__exception int js_parse_expr2(JSParseState *s, int parse_flags)
+{
+    BOOL comma = FALSE;
+    for(;;) {
+        if (js_parse_assign_expr2(s, parse_flags))
+            return -1;
+        if (comma) {
+            /* prevent get_lvalue from using the last expression
+               as an lvalue. This also prevents the conversion of
+               of get_var to get_ref for method lookup in function
+               call inside `with` statement.
+             */
+            s->cur_func->last_opcode_pos = -1;
+        }
+        if (s->token.val != ',')
+            break;
+        comma = TRUE;
+        if (next_token(s))
+            return -1;
+        emit_op(s, OP_drop);
+    }
+    return 0;
+}
+
 

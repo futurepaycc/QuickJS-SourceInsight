@@ -7113,7 +7113,6 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                                                int function_line_num,
                                                JSParseExportEnum export_flag,
                                                JSFunctionDef **pfd);
-static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags);
 static __exception int js_parse_assign_expr(JSParseState *s);
 static __exception int js_parse_unary(JSParseState *s, int parse_flags);
 static void push_break_entry(JSFunctionDef *fd, BlockEnv *be,
@@ -7608,16 +7607,6 @@ static __exception int js_parse_object_literal(JSParseState *s)
     return -1;
 }
 
-/* allow the 'in' binary operator */
-#define PF_IN_ACCEPTED  (1 << 0) 
-/* allow function calls parsing in js_parse_postfix_expr() */
-#define PF_POSTFIX_CALL (1 << 1) 
-/* allow arrow functions parsing in js_parse_postfix_expr() */
-#define PF_ARROW_FUNC   (1 << 2) 
-/* allow the exponentiation operator in js_parse_unary() */
-#define PF_POW_ALLOWED  (1 << 3) 
-/* forbid the exponentiation operator in js_parse_unary() */
-#define PF_POW_FORBIDDEN (1 << 4) 
 
 static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags);
 
@@ -10274,7 +10263,7 @@ static __exception int js_parse_cond_expr(JSParseState *s, int parse_flags)
 static void emit_return(JSParseState *s, BOOL hasval);
 
 /* allowed parse_flags: PF_IN_ACCEPTED */
-static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
+ __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
 {
     int opcode, op, scope;
     JSAtom name0 = JS_ATOM_NULL;
@@ -10525,35 +10514,6 @@ static __exception int js_parse_assign_expr(JSParseState *s)
     return js_parse_assign_expr2(s, PF_IN_ACCEPTED);
 }
 
-/* allowed parse_flags: PF_IN_ACCEPTED */
-static __exception int js_parse_expr2(JSParseState *s, int parse_flags)
-{
-    BOOL comma = FALSE;
-    for(;;) {
-        if (js_parse_assign_expr2(s, parse_flags))
-            return -1;
-        if (comma) {
-            /* prevent get_lvalue from using the last expression
-               as an lvalue. This also prevents the conversion of
-               of get_var to get_ref for method lookup in function
-               call inside `with` statement.
-             */
-            s->cur_func->last_opcode_pos = -1;
-        }
-        if (s->token.val != ',')
-            break;
-        comma = TRUE;
-        if (next_token(s))
-            return -1;
-        emit_op(s, OP_drop);
-    }
-    return 0;
-}
-
- __exception int js_parse_expr(JSParseState *s)
-{
-    return js_parse_expr2(s, PF_IN_ACCEPTED);
-}
 
 static void push_break_entry(JSFunctionDef *fd, BlockEnv *be,
                              JSAtom label_name,
@@ -13486,7 +13446,7 @@ static __exception int js_parse_import(JSParseState *s)
     return js_parse_expect_semi(s);
 }
 
-static __exception int js_parse_source_element(JSParseState *s)
+__exception int js_parse_source_element(JSParseState *s)
 {
     JSFunctionDef *fd = s->cur_func;
     int tok;
