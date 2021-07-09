@@ -2,8 +2,58 @@
 // Created by benpeng.jiang on 2021/7/2.
 //
 
-#include "ir-emit.h"
+#include "qjs-ir-emit.h"
 #include "qjs-atom.h"
+
+/* initialize the class fields, called by the constructor. Note:
+   super() can be called in an arrow function, so <this> and
+   <class_fields_init> can be variable references */
+void emit_class_field_init(JSParseState *s)
+{
+    int label_next;
+
+    emit_op(s, OP_scope_get_var);
+    emit_atom(s, JS_ATOM_class_fields_init);
+    emit_u16(s, s->cur_func->scope_level);
+
+    /* no need to call the class field initializer if not defined */
+    emit_op(s, OP_dup);
+    label_next = emit_goto(s, OP_if_false, -1);
+
+    emit_op(s, OP_scope_get_var);
+    emit_atom(s, JS_ATOM_this);
+    emit_u16(s, 0);
+
+    emit_op(s, OP_swap);
+
+    emit_op(s, OP_call_method);
+    emit_u16(s, 0);
+
+    emit_label(s, label_next);
+    emit_op(s, OP_drop);
+}
+
+BOOL js_is_live_code(JSParseState *s) {
+    switch (get_prev_opcode(s->cur_func)) {
+        case OP_tail_call:
+        case OP_tail_call_method:
+        case OP_return:
+        case OP_return_undef:
+        case OP_return_async:
+        case OP_throw:
+        case OP_throw_error:
+        case OP_goto:
+#if SHORT_OPCODES
+        case OP_goto8:
+        case OP_goto16:
+#endif
+        case OP_ret:
+            return FALSE;
+        default:
+            return TRUE;
+    }
+}
+
 
 __exception int emit_push_const(JSParseState *s, JSValueConst val,
                                        BOOL as_atom)

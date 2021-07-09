@@ -819,5 +819,9 @@ __exception int next_token(JSParseState *s)
     return -1;
 }
 
-
+int peek_token(JSParseState *s, BOOL no_line_terminator)
+{
+    const uint8_t *p = s->buf_ptr;
+    return simple_next_token(&p, no_line_terminator);
+}
 

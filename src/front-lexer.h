@@ -27,4 +27,7 @@ int js_parse_expect(JSParseState *s, int tok);
 
 __exception int next_token(JSParseState *s);
 
+int peek_token(JSParseState *s, BOOL no_line_terminator);
+int simple_next_token(const uint8_t **pp, BOOL no_line_terminator);
+
 #endif //LOX_JS_FONT_LEXER_H

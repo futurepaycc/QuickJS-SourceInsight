@@ -177,4 +177,23 @@ void free_token(JSParseState *s, JSToken *token);
 void __attribute((unused)) dump_token(JSParseState *s,
                                       const JSToken *token);
 
+
+#define PROP_TYPE_IDENT 0
+#define PROP_TYPE_VAR   1
+#define PROP_TYPE_GET   2
+#define PROP_TYPE_SET   3
+#define PROP_TYPE_STAR  4
+#define PROP_TYPE_ASYNC 5
+#define PROP_TYPE_ASYNC_STAR 6
+
+#define PROP_TYPE_PRIVATE (1 << 4)
+
+static BOOL token_is_ident(int tok)
+{
+    /* Accept keywords and reserved words as property names */
+    return (tok == TOK_IDENT ||
+            (tok >= TOK_FIRST_KEYWORD &&
+             tok <= TOK_LAST_KEYWORD));
+}
+
 #endif //LOX_JS_FRONT_TOKEN_H

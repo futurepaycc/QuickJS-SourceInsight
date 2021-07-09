@@ -4,6 +4,6 @@
 
 #ifndef LOX_JS_IR_H
 #define LOX_JS_IR_H
-#include "ir-emit.h"
+#include "qjs-ir-emit.h"
 
 #endif //LOX_JS_IR_H
