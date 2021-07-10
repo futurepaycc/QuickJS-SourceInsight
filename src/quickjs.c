@@ -7948,14 +7948,8 @@ static __exception int emit_break(JSParseState *s, JSAtom name, int is_cont)
     }
 }
 
-#define DECL_MASK_FUNC  (1 << 0) /* allow normal function declaration */
-/* ored with DECL_MASK_FUNC if function declarations are allowed with a label */
-#define DECL_MASK_FUNC_WITH_LABEL (1 << 1)
-#define DECL_MASK_OTHER (1 << 2) /* all other declarations */
-#define DECL_MASK_ALL   (DECL_MASK_FUNC | DECL_MASK_FUNC_WITH_LABEL | DECL_MASK_OTHER)
 
-static __exception int js_parse_statement_or_decl(JSParseState *s,
-                                                  int decl_mask);
+
 
 static __exception int js_parse_statement(JSParseState *s)
 {
@@ -8364,7 +8358,7 @@ static void set_eval_ret_undefined(JSParseState *s)
     }
 }
 
-static __exception int js_parse_statement_or_decl(JSParseState *s,
+ __exception int js_parse_statement_or_decl(JSParseState *s,
                                                   int decl_mask)
 {
     JSContext *ctx = s->ctx;
