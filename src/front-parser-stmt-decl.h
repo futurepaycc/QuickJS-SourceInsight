@@ -36,4 +36,16 @@ JSExportEntry *add_export_entry2(JSContext *ctx,
 JSExportEntry *find_export_entry(JSContext *ctx, JSModuleDef *m,
                                  JSAtom export_name);
 
+int add_var(JSContext *ctx, JSFunctionDef *fd, JSAtom name);
+
+int find_var(JSContext *ctx, JSFunctionDef *fd, JSAtom name);
+
+int resolve_scope_private_field1(JSContext *ctx,
+                                 BOOL *pis_ref, int *pvar_kind,
+                                 JSFunctionDef *s,
+                                 JSAtom var_name, int scope_level);
+
+int resolve_scope_private_field(JSContext *ctx, JSFunctionDef *s,
+                                JSAtom var_name, int scope_level, int op,
+                                DynBuf *bc);
 #endif //LOX_JS_FRONT_PARSER_STMT_DECL_H

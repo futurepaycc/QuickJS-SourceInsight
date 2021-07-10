@@ -35,4 +35,5 @@
 #include "qjs-closure.h"
 #include "qjs-front.h"
 #include "qjs-ir.h"
+#include "qjs-resolver.h"
 #endif /* QUICKJS_H */
