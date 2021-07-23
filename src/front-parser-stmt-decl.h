@@ -48,4 +48,14 @@ int resolve_scope_private_field1(JSContext *ctx,
 int resolve_scope_private_field(JSContext *ctx, JSFunctionDef *s,
                                 JSAtom var_name, int scope_level, int op,
                                 DynBuf *bc);
+
+JSFunctionDef *js_new_function_def(JSContext *ctx,
+                                   JSFunctionDef *parent,
+                                   BOOL is_eval,
+                                   BOOL is_func_expr,
+                                   const char *filename, int line_num);
+
+__exception int js_parse_program(JSParseState *s);
+
+int add_arguments_arg(JSContext *ctx, JSFunctionDef *fd);
 #endif //LOX_JS_FRONT_PARSER_STMT_DECL_H
