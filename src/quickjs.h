@@ -36,4 +36,5 @@
 #include "qjs-front.h"
 #include "qjs-ir.h"
 #include "qjs-resolver.h"
+#include "qjs-dumper.h"
 #endif /* QUICKJS_H */
