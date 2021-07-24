@@ -25,7 +25,7 @@ typedef struct JSArrayIteratorData {
                                             uint8_t *buf,
                                             JSFreeArrayBufferDataFunc *free_func,
                                             void *opaque, BOOL alloc_flag);
-static JSArrayBuffer *js_get_array_buffer(JSContext *ctx, JSValueConst obj);
+ JSArrayBuffer *js_get_array_buffer(JSContext *ctx, JSValueConst obj);
 static JSValue js_typed_array_constructor(JSContext *ctx,
                                           JSValueConst this_val,
                                           int argc, JSValueConst *argv,
@@ -86,4 +86,9 @@ JSValue js_array_constructor(JSContext *ctx, JSValueConst new_target,
 JSValue js_array_lastIndexOf(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv);
 void JS_SetArrayPropertyFunctionList(JSContext *ctx);
+
+
+JSValue js_array_buffer_slice(JSContext *ctx,
+                              JSValueConst this_val,
+                              int argc, JSValueConst *argv, int class_id);
 #endif //LOX_JS_ECMA_ARRAY_H

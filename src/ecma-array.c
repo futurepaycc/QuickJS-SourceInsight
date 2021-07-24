@@ -1739,3 +1739,104 @@ void JS_SetArrayPropertyFunctionList(JSContext *ctx)
                                js_array_proto_funcs,
                                countof(js_array_proto_funcs));
 }
+
+
+/* get an ArrayBuffer or SharedArrayBuffer */
+JSArrayBuffer *js_get_array_buffer(JSContext *ctx, JSValueConst obj)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        goto fail;
+    p = JS_VALUE_GET_OBJ(obj);
+    if (p->class_id != JS_CLASS_ARRAY_BUFFER &&
+        p->class_id != JS_CLASS_SHARED_ARRAY_BUFFER) {
+        fail:
+        JS_ThrowTypeErrorInvalidClass(ctx, JS_CLASS_ARRAY_BUFFER);
+        return NULL;
+    }
+    return p->u.array_buffer;
+}
+
+/* return NULL if exception. WARNING: any JS call can detach the
+   buffer and render the returned pointer invalid */
+uint8_t *JS_GetArrayBuffer(JSContext *ctx, size_t *psize, JSValueConst obj)
+{
+    JSArrayBuffer *abuf = js_get_array_buffer(ctx, obj);
+    if (!abuf)
+        goto fail;
+    if (abuf->detached) {
+        JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
+        goto fail;
+    }
+    *psize = abuf->byte_length;
+    return abuf->data;
+    fail:
+    *psize = 0;
+    return NULL;
+}
+
+ JSValue js_array_buffer_slice(JSContext *ctx,
+                                     JSValueConst this_val,
+                                     int argc, JSValueConst *argv, int class_id)
+{
+    JSArrayBuffer *abuf, *new_abuf;
+    int64_t len, start, end, new_len;
+    JSValue ctor, new_obj;
+
+    abuf = JS_GetOpaque2(ctx, this_val, class_id);
+    if (!abuf)
+        return JS_EXCEPTION;
+    if (abuf->detached)
+        return JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
+    len = abuf->byte_length;
+
+    if (JS_ToInt64Clamp(ctx, &start, argv[0], 0, len, len))
+        return JS_EXCEPTION;
+
+    end = len;
+    if (!JS_IsUndefined(argv[1])) {
+        if (JS_ToInt64Clamp(ctx, &end, argv[1], 0, len, len))
+            return JS_EXCEPTION;
+    }
+    new_len = max_int64(end - start, 0);
+    ctor = JS_SpeciesConstructor(ctx, this_val, JS_UNDEFINED);
+    if (JS_IsException(ctor))
+        return ctor;
+    if (JS_IsUndefined(ctor)) {
+        new_obj = js_array_buffer_constructor2(ctx, JS_UNDEFINED, new_len,
+                                               class_id);
+    } else {
+        JSValue args[1];
+        args[0] = JS_NewInt64(ctx, new_len);
+        new_obj = JS_CallConstructor(ctx, ctor, 1, (JSValueConst *)args);
+        JS_FreeValue(ctx, ctor);
+        JS_FreeValue(ctx, args[0]);
+    }
+    if (JS_IsException(new_obj))
+        return new_obj;
+    new_abuf = JS_GetOpaque2(ctx, new_obj, class_id);
+    if (!new_abuf)
+        goto fail;
+    if (js_same_value(ctx, new_obj, this_val)) {
+        JS_ThrowTypeError(ctx, "cannot use identical ArrayBuffer");
+        goto fail;
+    }
+    if (new_abuf->detached) {
+        JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
+        goto fail;
+    }
+    if (new_abuf->byte_length < new_len) {
+        JS_ThrowTypeError(ctx, "new ArrayBuffer is too small");
+        goto fail;
+    }
+    /* must test again because of side effects */
+    if (abuf->detached) {
+        JS_ThrowTypeErrorDetachedArrayBuffer(ctx);
+        goto fail;
+    }
+    memcpy(new_abuf->data, abuf->data + start, new_len);
+    return new_obj;
+    fail:
+    JS_FreeValue(ctx, new_obj);
+    return JS_EXCEPTION;
+}

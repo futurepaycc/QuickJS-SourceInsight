@@ -11,9 +11,11 @@
 #include "ecma-regexp.h"
 #include "ecma-array.h"
 #include "ecma-arraybuffer.h"
+#include "ecma-typedarray.h"
 #include "ecma-modules.h"
 #include "ecma-collections.h"
 #include "ecma-bignumber.h"
 #include "ecma-iterator.h"
+#include "ecma-dataview.h"
 
 #endif //LOX_JS_ECMA_H

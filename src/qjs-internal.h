@@ -1203,5 +1203,7 @@ typedef struct JSFunctionDef {
     JSModuleDef *module; /* != NULL when parsing a module */
 } JSFunctionDef;
 
+JSValue JS_SpeciesConstructor(JSContext *ctx, JSValueConst obj,
+                              JSValueConst defaultConstructor);
 #endif //LOX_JS_INTERNAL_H
 
