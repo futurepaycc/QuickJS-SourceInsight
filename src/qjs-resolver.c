@@ -1254,3 +1254,1100 @@ __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
     s->byte_code = bc_out;
     return -1;
 }
+
+
+/* the pc2line table gives a line number for each PC value */
+static void add_pc2line_info(JSFunctionDef *s, uint32_t pc, int line_num)
+{
+    if (s->line_number_slots != NULL
+        &&  s->line_number_count < s->line_number_size
+        &&  pc >= s->line_number_last_pc
+        &&  line_num != s->line_number_last) {
+        s->line_number_slots[s->line_number_count].pc = pc;
+        s->line_number_slots[s->line_number_count].line_num = line_num;
+        s->line_number_count++;
+        s->line_number_last_pc = pc;
+        s->line_number_last = line_num;
+    }
+}
+
+static void compute_pc2line_info(JSFunctionDef *s)
+{
+    if (!(s->js_mode & JS_MODE_STRIP) && s->line_number_slots) {
+        int last_line_num = s->line_num;
+        uint32_t last_pc = 0;
+        int i;
+
+        js_dbuf_init(s->ctx, &s->pc2line);
+        for (i = 0; i < s->line_number_count; i++) {
+            uint32_t pc = s->line_number_slots[i].pc;
+            int line_num = s->line_number_slots[i].line_num;
+            int diff_pc, diff_line;
+
+            if (line_num < 0)
+                continue;
+
+            diff_pc = pc - last_pc;
+            diff_line = line_num - last_line_num;
+            if (diff_line == 0 || diff_pc < 0)
+                continue;
+
+            if (diff_line >= PC2LINE_BASE &&
+                diff_line < PC2LINE_BASE + PC2LINE_RANGE &&
+                diff_pc <= PC2LINE_DIFF_PC_MAX) {
+                dbuf_putc(&s->pc2line, (diff_line - PC2LINE_BASE) +
+                                       diff_pc * PC2LINE_RANGE + PC2LINE_OP_FIRST);
+            } else {
+                /* longer encoding */
+                dbuf_putc(&s->pc2line, 0);
+                dbuf_put_leb128(&s->pc2line, diff_pc);
+                dbuf_put_sleb128(&s->pc2line, diff_line);
+            }
+            last_pc = pc;
+            last_line_num = line_num;
+        }
+    }
+}
+
+static RelocEntry *add_reloc(JSContext *ctx, LabelSlot *ls, uint32_t addr, int size)
+{
+    RelocEntry *re;
+    re = js_malloc(ctx, sizeof(*re));
+    if (!re)
+        return NULL;
+    re->addr = addr;
+    re->size = size;
+    re->next = ls->first_reloc;
+    ls->first_reloc = re;
+    return re;
+}
+
+static BOOL code_has_label(CodeContext *s, int pos, int label)
+{
+    while (pos < s->bc_len) {
+        int op = s->bc_buf[pos];
+        if (op == OP_line_num) {
+            pos += 5;
+            continue;
+        }
+        if (op == OP_label) {
+            int lab = get_u32(s->bc_buf + pos + 1);
+            if (lab == label)
+                return TRUE;
+            pos += 5;
+            continue;
+        }
+        if (op == OP_goto) {
+            int lab = get_u32(s->bc_buf + pos + 1);
+            if (lab == label)
+                return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+/* return the target label, following the OP_goto jumps
+   the first opcode at destination is stored in *pop
+ */
+static int find_jump_target(JSFunctionDef *s, int label, int *pop, int *pline)
+{
+    int i, pos, op;
+
+    update_label(s, label, -1);
+    for (i = 0; i < 10; i++) {
+        assert(label >= 0 && label < s->label_count);
+        pos = s->label_slots[label].pos2;
+        for (;;) {
+            switch(op = s->byte_code.buf[pos]) {
+                case OP_line_num:
+                    if (pline)
+                        *pline = get_u32(s->byte_code.buf + pos + 1);
+                    /* fall thru */
+                case OP_label:
+                    pos += opcode_info[op].size;
+                    continue;
+                case OP_goto:
+                    label = get_u32(s->byte_code.buf + pos + 1);
+                    break;
+                case OP_drop:
+                    /* ignore drop opcodes if followed by OP_return_undef */
+                    while (s->byte_code.buf[++pos] == OP_drop)
+                        continue;
+                    if (s->byte_code.buf[pos] == OP_return_undef)
+                        op = OP_return_undef;
+                    /* fall thru */
+                default:
+                    goto done;
+            }
+            break;
+        }
+    }
+    /* cycle detected, could issue a warning */
+    done:
+    *pop = op;
+    update_label(s, label, +1);
+    return label;
+}
+
+static void push_short_int(DynBuf *bc_out, int val)
+{
+#if SHORT_OPCODES
+    if (val >= -1 && val <= 7) {
+        dbuf_putc(bc_out, OP_push_0 + val);
+        return;
+    }
+    if (val == (int8_t)val) {
+        dbuf_putc(bc_out, OP_push_i8);
+        dbuf_putc(bc_out, val);
+        return;
+    }
+    if (val == (int16_t)val) {
+        dbuf_putc(bc_out, OP_push_i16);
+        dbuf_put_u16(bc_out, val);
+        return;
+    }
+#endif
+    dbuf_putc(bc_out, OP_push_i32);
+    dbuf_put_u32(bc_out, val);
+}
+
+static void put_short_code(DynBuf *bc_out, int op, int idx)
+{
+#if SHORT_OPCODES
+    if (idx < 4) {
+        switch (op) {
+            case OP_get_loc:
+                dbuf_putc(bc_out, OP_get_loc0 + idx);
+                return;
+            case OP_put_loc:
+                dbuf_putc(bc_out, OP_put_loc0 + idx);
+                return;
+            case OP_set_loc:
+                dbuf_putc(bc_out, OP_set_loc0 + idx);
+                return;
+            case OP_get_arg:
+                dbuf_putc(bc_out, OP_get_arg0 + idx);
+                return;
+            case OP_put_arg:
+                dbuf_putc(bc_out, OP_put_arg0 + idx);
+                return;
+            case OP_set_arg:
+                dbuf_putc(bc_out, OP_set_arg0 + idx);
+                return;
+            case OP_get_var_ref:
+                dbuf_putc(bc_out, OP_get_var_ref0 + idx);
+                return;
+            case OP_put_var_ref:
+                dbuf_putc(bc_out, OP_put_var_ref0 + idx);
+                return;
+            case OP_set_var_ref:
+                dbuf_putc(bc_out, OP_set_var_ref0 + idx);
+                return;
+            case OP_call:
+                dbuf_putc(bc_out, OP_call0 + idx);
+                return;
+        }
+    }
+    if (idx < 256) {
+        switch (op) {
+            case OP_get_loc:
+                dbuf_putc(bc_out, OP_get_loc8);
+                dbuf_putc(bc_out, idx);
+                return;
+            case OP_put_loc:
+                dbuf_putc(bc_out, OP_put_loc8);
+                dbuf_putc(bc_out, idx);
+                return;
+            case OP_set_loc:
+                dbuf_putc(bc_out, OP_set_loc8);
+                dbuf_putc(bc_out, idx);
+                return;
+        }
+    }
+#endif
+    dbuf_putc(bc_out, op);
+    dbuf_put_u16(bc_out, idx);
+}
+
+/* peephole optimizations and resolve goto/labels */
+ __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+{
+    int pos, pos_next, bc_len, op, op1, len, i, line_num;
+    const uint8_t *bc_buf;
+    DynBuf bc_out;
+    LabelSlot *label_slots, *ls;
+    RelocEntry *re, *re_next;
+    CodeContext cc;
+    int label;
+#if SHORT_OPCODES
+    JumpSlot *jp;
+#endif
+
+    label_slots = s->label_slots;
+
+    line_num = s->line_num;
+
+    cc.bc_buf = bc_buf = s->byte_code.buf;
+    cc.bc_len = bc_len = s->byte_code.size;
+    js_dbuf_init(ctx, &bc_out);
+
+#if SHORT_OPCODES
+    if (s->jump_size) {
+        s->jump_slots = js_mallocz(s->ctx, sizeof(*s->jump_slots) * s->jump_size);
+        if (s->jump_slots == NULL)
+            return -1;
+    }
+#endif
+    /* XXX: Should skip this phase if not generating SHORT_OPCODES */
+    if (s->line_number_size && !(s->js_mode & JS_MODE_STRIP)) {
+        s->line_number_slots = js_mallocz(s->ctx, sizeof(*s->line_number_slots) * s->line_number_size);
+        if (s->line_number_slots == NULL)
+            return -1;
+        s->line_number_last = s->line_num;
+        s->line_number_last_pc = 0;
+    }
+
+    /* initialize the 'home_object' variable if needed */
+    if (s->home_object_var_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_HOME_OBJECT);
+        put_short_code(&bc_out, OP_put_loc, s->home_object_var_idx);
+    }
+    /* initialize the 'this.active_func' variable if needed */
+    if (s->this_active_func_var_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_THIS_FUNC);
+        put_short_code(&bc_out, OP_put_loc, s->this_active_func_var_idx);
+    }
+    /* initialize the 'new.target' variable if needed */
+    if (s->new_target_var_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_NEW_TARGET);
+        put_short_code(&bc_out, OP_put_loc, s->new_target_var_idx);
+    }
+    /* initialize the 'this' variable if needed. In a derived class
+       constructor, this is initially uninitialized. */
+    if (s->this_var_idx >= 0) {
+        if (s->is_derived_class_constructor) {
+            dbuf_putc(&bc_out, OP_set_loc_uninitialized);
+            dbuf_put_u16(&bc_out, s->this_var_idx);
+        } else {
+            dbuf_putc(&bc_out, OP_push_this);
+            put_short_code(&bc_out, OP_put_loc, s->this_var_idx);
+        }
+    }
+    /* initialize the 'arguments' variable if needed */
+    if (s->arguments_var_idx >= 0) {
+        if ((s->js_mode & JS_MODE_STRICT) || !s->has_simple_parameter_list) {
+            dbuf_putc(&bc_out, OP_special_object);
+            dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_ARGUMENTS);
+        } else {
+            dbuf_putc(&bc_out, OP_special_object);
+            dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_MAPPED_ARGUMENTS);
+        }
+        if (s->arguments_arg_idx >= 0)
+            put_short_code(&bc_out, OP_set_loc, s->arguments_arg_idx);
+        put_short_code(&bc_out, OP_put_loc, s->arguments_var_idx);
+    }
+    /* initialize a reference to the current function if needed */
+    if (s->func_var_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_THIS_FUNC);
+        put_short_code(&bc_out, OP_put_loc, s->func_var_idx);
+    }
+    /* initialize the variable environment object if needed */
+    if (s->var_object_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_VAR_OBJECT);
+        put_short_code(&bc_out, OP_put_loc, s->var_object_idx);
+    }
+    if (s->arg_var_object_idx >= 0) {
+        dbuf_putc(&bc_out, OP_special_object);
+        dbuf_putc(&bc_out, OP_SPECIAL_OBJECT_VAR_OBJECT);
+        put_short_code(&bc_out, OP_put_loc, s->arg_var_object_idx);
+    }
+
+    for (pos = 0; pos < bc_len; pos = pos_next) {
+        int val;
+        op = bc_buf[pos];
+        len = opcode_info[op].size;
+        pos_next = pos + len;
+        switch(op) {
+            case OP_line_num:
+                /* line number info (for debug). We put it in a separate
+                   compressed table to reduce memory usage and get better
+                   performance */
+                line_num = get_u32(bc_buf + pos + 1);
+                break;
+
+            case OP_label:
+            {
+                label = get_u32(bc_buf + pos + 1);
+                assert(label >= 0 && label < s->label_count);
+                ls = &label_slots[label];
+                assert(ls->addr == -1);
+                ls->addr = bc_out.size;
+                /* resolve the relocation entries */
+                for(re = ls->first_reloc; re != NULL; re = re_next) {
+                    int diff = ls->addr - re->addr;
+                    re_next = re->next;
+                    switch (re->size) {
+                        case 4:
+                            put_u32(bc_out.buf + re->addr, diff);
+                            break;
+                        case 2:
+                            assert(diff == (int16_t)diff);
+                            put_u16(bc_out.buf + re->addr, diff);
+                            break;
+                        case 1:
+                            assert(diff == (int8_t)diff);
+                            put_u8(bc_out.buf + re->addr, diff);
+                            break;
+                    }
+                    js_free(ctx, re);
+                }
+                ls->first_reloc = NULL;
+            }
+                break;
+
+            case OP_call:
+            case OP_call_method:
+            {
+                /* detect and transform tail calls */
+                int argc;
+                argc = get_u16(bc_buf + pos + 1);
+                if (code_match(&cc, pos_next, OP_return, -1)) {
+                    if (cc.line_num >= 0) line_num = cc.line_num;
+                    add_pc2line_info(s, bc_out.size, line_num);
+                    put_short_code(&bc_out, op + 1, argc);
+                    pos_next = skip_dead_code(s, bc_buf, bc_len, cc.pos, &line_num);
+                    break;
+                }
+                add_pc2line_info(s, bc_out.size, line_num);
+                put_short_code(&bc_out, op, argc);
+                break;
+            }
+                goto no_change;
+
+            case OP_return:
+            case OP_return_undef:
+            case OP_return_async:
+            case OP_throw:
+            case OP_throw_error:
+                pos_next = skip_dead_code(s, bc_buf, bc_len, pos_next, &line_num);
+                goto no_change;
+
+            case OP_goto:
+                label = get_u32(bc_buf + pos + 1);
+            has_goto:
+                if (OPTIMIZE) {
+                    int line1 = -1;
+                    /* Use custom matcher because multiple labels can follow */
+                    label = find_jump_target(s, label, &op1, &line1);
+                    if (code_has_label(&cc, pos_next, label)) {
+                        /* jump to next instruction: remove jump */
+                        update_label(s, label, -1);
+                        break;
+                    }
+                    if (op1 == OP_return || op1 == OP_return_undef || op1 == OP_throw) {
+                        /* jump to return/throw: remove jump, append return/throw */
+                        /* updating the line number obfuscates assembly listing */
+                        //if (line1 >= 0) line_num = line1;
+                        update_label(s, label, -1);
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, op1);
+                        pos_next = skip_dead_code(s, bc_buf, bc_len, pos_next, &line_num);
+                        break;
+                    }
+                    /* XXX: should duplicate single instructions followed by goto or return */
+                    /* For example, can match one of these followed by return:
+                       push_i32 / push_const / push_atom_value / get_var /
+                       undefined / null / push_false / push_true / get_ref_value /
+                       get_loc / get_arg / get_var_ref
+                     */
+                }
+                goto has_label;
+
+            case OP_gosub:
+                label = get_u32(bc_buf + pos + 1);
+                if (0 && OPTIMIZE) {
+                    label = find_jump_target(s, label, &op1, NULL);
+                    if (op1 == OP_ret) {
+                        update_label(s, label, -1);
+                        /* empty finally clause: remove gosub */
+                        break;
+                    }
+                }
+                goto has_label;
+
+            case OP_catch:
+                label = get_u32(bc_buf + pos + 1);
+                goto has_label;
+
+            case OP_if_true:
+            case OP_if_false:
+                label = get_u32(bc_buf + pos + 1);
+                if (OPTIMIZE) {
+                    label = find_jump_target(s, label, &op1, NULL);
+                    /* transform if_false/if_true(l1) label(l1) -> drop label(l1) */
+                    if (code_has_label(&cc, pos_next, label)) {
+                        update_label(s, label, -1);
+                        dbuf_putc(&bc_out, OP_drop);
+                        break;
+                    }
+                    /* transform if_false(l1) goto(l2) label(l1) -> if_false(l2) label(l1) */
+                    if (code_match(&cc, pos_next, OP_goto, -1)) {
+                        int pos1 = cc.pos;
+                        int line1 = cc.line_num;
+                        if (code_has_label(&cc, pos1, label)) {
+                            if (line1 >= 0) line_num = line1;
+                            pos_next = pos1;
+                            update_label(s, label, -1);
+                            label = cc.label;
+                            op ^= OP_if_true ^ OP_if_false;
+                        }
+                    }
+                }
+            has_label:
+                add_pc2line_info(s, bc_out.size, line_num);
+                if (op == OP_goto) {
+                    pos_next = skip_dead_code(s, bc_buf, bc_len, pos_next, &line_num);
+                }
+                assert(label >= 0 && label < s->label_count);
+                ls = &label_slots[label];
+#if SHORT_OPCODES
+                jp = &s->jump_slots[s->jump_count++];
+                jp->op = op;
+                jp->size = 4;
+                jp->pos = bc_out.size + 1;
+                jp->label = label;
+
+                if (ls->addr == -1) {
+                    int diff = ls->pos2 - pos - 1;
+                    if (diff < 128 && (op == OP_if_false || op == OP_if_true || op == OP_goto)) {
+                        jp->size = 1;
+                        jp->op = OP_if_false8 + (op - OP_if_false);
+                        dbuf_putc(&bc_out, OP_if_false8 + (op - OP_if_false));
+                        dbuf_putc(&bc_out, 0);
+                        if (!add_reloc(ctx, ls, bc_out.size - 1, 1))
+                            goto fail;
+                        break;
+                    }
+                    if (diff < 32768 && op == OP_goto) {
+                        jp->size = 2;
+                        jp->op = OP_goto16;
+                        dbuf_putc(&bc_out, OP_goto16);
+                        dbuf_put_u16(&bc_out, 0);
+                        if (!add_reloc(ctx, ls, bc_out.size - 2, 2))
+                            goto fail;
+                        break;
+                    }
+                } else {
+                    int diff = ls->addr - bc_out.size - 1;
+                    if (diff == (int8_t)diff && (op == OP_if_false || op == OP_if_true || op == OP_goto)) {
+                        jp->size = 1;
+                        jp->op = OP_if_false8 + (op - OP_if_false);
+                        dbuf_putc(&bc_out, OP_if_false8 + (op - OP_if_false));
+                        dbuf_putc(&bc_out, diff);
+                        break;
+                    }
+                    if (diff == (int16_t)diff && op == OP_goto) {
+                        jp->size = 2;
+                        jp->op = OP_goto16;
+                        dbuf_putc(&bc_out, OP_goto16);
+                        dbuf_put_u16(&bc_out, diff);
+                        break;
+                    }
+                }
+#endif
+                dbuf_putc(&bc_out, op);
+                dbuf_put_u32(&bc_out, ls->addr - bc_out.size);
+                if (ls->addr == -1) {
+                    /* unresolved yet: create a new relocation entry */
+                    if (!add_reloc(ctx, ls, bc_out.size - 4, 4))
+                        goto fail;
+                }
+                break;
+            case OP_with_get_var:
+            case OP_with_put_var:
+            case OP_with_delete_var:
+            case OP_with_make_ref:
+            case OP_with_get_ref:
+            case OP_with_get_ref_undef:
+            {
+                JSAtom atom;
+                int is_with;
+
+                atom = get_u32(bc_buf + pos + 1);
+                label = get_u32(bc_buf + pos + 5);
+                is_with = bc_buf[pos + 9];
+                if (OPTIMIZE) {
+                    label = find_jump_target(s, label, &op1, NULL);
+                }
+                assert(label >= 0 && label < s->label_count);
+                ls = &label_slots[label];
+                add_pc2line_info(s, bc_out.size, line_num);
+#if SHORT_OPCODES
+                jp = &s->jump_slots[s->jump_count++];
+                jp->op = op;
+                jp->size = 4;
+                jp->pos = bc_out.size + 5;
+                jp->label = label;
+#endif
+                dbuf_putc(&bc_out, op);
+                dbuf_put_u32(&bc_out, atom);
+                dbuf_put_u32(&bc_out, ls->addr - bc_out.size);
+                if (ls->addr == -1) {
+                    /* unresolved yet: create a new relocation entry */
+                    if (!add_reloc(ctx, ls, bc_out.size - 4, 4))
+                        goto fail;
+                }
+                dbuf_putc(&bc_out, is_with);
+            }
+                break;
+
+            case OP_drop:
+                if (OPTIMIZE) {
+                    /* remove useless drops before return */
+                    if (code_match(&cc, pos_next, OP_return_undef, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        break;
+                    }
+                }
+                goto no_change;
+
+            case OP_null:
+#if SHORT_OPCODES
+                if (OPTIMIZE) {
+                    /* transform null strict_eq into is_null */
+                    if (code_match(&cc, pos_next, OP_strict_eq, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_is_null);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transform null strict_neq if_false/if_true -> is_null if_true/if_false */
+                    if (code_match(&cc, pos_next, OP_strict_neq, M2(OP_if_false, OP_if_true), -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_is_null);
+                        pos_next = cc.pos;
+                        label = cc.label;
+                        op = cc.op ^ OP_if_false ^ OP_if_true;
+                        goto has_label;
+                    }
+                }
+#endif
+                /* fall thru */
+            case OP_push_false:
+            case OP_push_true:
+                if (OPTIMIZE) {
+                    val = (op == OP_push_true);
+                    if (code_match(&cc, pos_next, M2(OP_if_false, OP_if_true), -1)) {
+                        has_constant_test:
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        if (val == cc.op - OP_if_false) {
+                            /* transform null if_false(l1) -> goto l1 */
+                            /* transform false if_false(l1) -> goto l1 */
+                            /* transform true if_true(l1) -> goto l1 */
+                            pos_next = cc.pos;
+                            op = OP_goto;
+                            label = cc.label;
+                            goto has_goto;
+                        } else {
+                            /* transform null if_true(l1) -> nop */
+                            /* transform false if_true(l1) -> nop */
+                            /* transform true if_false(l1) -> nop */
+                            pos_next = cc.pos;
+                            update_label(s, cc.label, -1);
+                            break;
+                        }
+                    }
+                }
+                goto no_change;
+
+            case OP_push_i32:
+                if (OPTIMIZE) {
+                    /* transform i32(val) neg -> i32(-val) */
+                    val = get_i32(bc_buf + pos + 1);
+                    if ((val != INT32_MIN && val != 0)
+                        &&  code_match(&cc, pos_next, OP_neg, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        if (code_match(&cc, cc.pos, OP_drop, -1)) {
+                            if (cc.line_num >= 0) line_num = cc.line_num;
+                        } else {
+                            add_pc2line_info(s, bc_out.size, line_num);
+                            push_short_int(&bc_out, -val);
+                        }
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* remove push/drop pairs generated by the parser */
+                    if (code_match(&cc, pos_next, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* Optimize constant tests: `if (0)`, `if (1)`, `if (!0)`... */
+                    if (code_match(&cc, pos_next, M2(OP_if_false, OP_if_true), -1)) {
+                        val = (val != 0);
+                        goto has_constant_test;
+                    }
+                    add_pc2line_info(s, bc_out.size, line_num);
+                    push_short_int(&bc_out, val);
+                    break;
+                }
+                goto no_change;
+
+#if SHORT_OPCODES
+            case OP_push_const:
+            case OP_fclosure:
+                if (OPTIMIZE) {
+                    int idx = get_u32(bc_buf + pos + 1);
+                    if (idx < 256) {
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_push_const8 + op - OP_push_const);
+                        dbuf_putc(&bc_out, idx);
+                        break;
+                    }
+                }
+                goto no_change;
+
+            case OP_get_field:
+                if (OPTIMIZE) {
+                    JSAtom atom = get_u32(bc_buf + pos + 1);
+                    if (atom == JS_ATOM_length) {
+                        JS_FreeAtom(ctx, atom);
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_get_length);
+                        break;
+                    }
+                }
+                goto no_change;
+#endif
+            case OP_push_atom_value:
+                if (OPTIMIZE) {
+                    JSAtom atom = get_u32(bc_buf + pos + 1);
+                    /* remove push/drop pairs generated by the parser */
+                    if (code_match(&cc, pos_next, OP_drop, -1)) {
+                        JS_FreeAtom(ctx, atom);
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        pos_next = cc.pos;
+                        break;
+                    }
+#if SHORT_OPCODES
+                    if (atom == JS_ATOM_empty_string) {
+                        JS_FreeAtom(ctx, atom);
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_push_empty_string);
+                        break;
+                    }
+#endif
+                }
+                goto no_change;
+
+            case OP_to_propkey:
+            case OP_to_propkey2:
+                if (OPTIMIZE) {
+                    /* remove redundant to_propkey/to_propkey2 opcodes when storing simple data */
+                    if (code_match(&cc, pos_next, M3(OP_get_loc, OP_get_arg, OP_get_var_ref), -1, OP_put_array_el, -1)
+                        ||  code_match(&cc, pos_next, M3(OP_push_i32, OP_push_const, OP_push_atom_value), OP_put_array_el, -1)
+                        ||  code_match(&cc, pos_next, M4(OP_undefined, OP_null, OP_push_true, OP_push_false), OP_put_array_el, -1)) {
+                        break;
+                    }
+                }
+                goto no_change;
+
+            case OP_undefined:
+                if (OPTIMIZE) {
+                    /* remove push/drop pairs generated by the parser */
+                    if (code_match(&cc, pos_next, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transform undefined return -> return_undefined */
+                    if (code_match(&cc, pos_next, OP_return, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_return_undef);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transform undefined if_true(l1)/if_false(l1) -> nop/goto(l1) */
+                    if (code_match(&cc, pos_next, M2(OP_if_false, OP_if_true), -1)) {
+                        val = 0;
+                        goto has_constant_test;
+                    }
+#if SHORT_OPCODES
+                    /* transform undefined strict_eq -> is_undefined */
+                    if (code_match(&cc, pos_next, OP_strict_eq, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_is_undefined);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transform undefined strict_neq if_false/if_true -> is_undefined if_true/if_false */
+                    if (code_match(&cc, pos_next, OP_strict_neq, M2(OP_if_false, OP_if_true), -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_is_undefined);
+                        pos_next = cc.pos;
+                        label = cc.label;
+                        op = cc.op ^ OP_if_false ^ OP_if_true;
+                        goto has_label;
+                    }
+#endif
+                }
+                goto no_change;
+
+            case OP_insert2:
+                if (OPTIMIZE) {
+                    /* Transformation:
+                       insert2 put_field(a) drop -> put_field(a)
+                       insert2 put_var_strict(a) drop -> put_var_strict(a)
+                    */
+                    if (code_match(&cc, pos_next, M2(OP_put_field, OP_put_var_strict), OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, cc.op);
+                        dbuf_put_u32(&bc_out, cc.atom);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                }
+                goto no_change;
+
+            case OP_dup:
+                if (OPTIMIZE) {
+                    /* Transformation: dup put_x(n) drop -> put_x(n) */
+                    int op1, line2 = -1;
+                    /* Transformation: dup put_x(n) -> set_x(n) */
+                    if (code_match(&cc, pos_next, M3(OP_put_loc, OP_put_arg, OP_put_var_ref), -1, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        op1 = cc.op + 1;  /* put_x -> set_x */
+                        pos_next = cc.pos;
+                        if (code_match(&cc, cc.pos, OP_drop, -1)) {
+                            if (cc.line_num >= 0) line_num = cc.line_num;
+                            op1 -= 1; /* set_x drop -> put_x */
+                            pos_next = cc.pos;
+                            if (code_match(&cc, cc.pos, op1 - 1, cc.idx, -1)) {
+                                line2 = cc.line_num; /* delay line number update */
+                                op1 += 1;   /* put_x(n) get_x(n) -> set_x(n) */
+                                pos_next = cc.pos;
+                            }
+                        }
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        put_short_code(&bc_out, op1, cc.idx);
+                        if (line2 >= 0) line_num = line2;
+                        break;
+                    }
+                }
+                goto no_change;
+
+            case OP_get_loc:
+                if (OPTIMIZE) {
+                    /* transformation:
+                       get_loc(n) post_dec put_loc(n) drop -> dec_loc(n)
+                       get_loc(n) post_inc put_loc(n) drop -> inc_loc(n)
+                       get_loc(n) dec dup put_loc(n) drop -> dec_loc(n)
+                       get_loc(n) inc dup put_loc(n) drop -> inc_loc(n)
+                     */
+                    int idx;
+                    idx = get_u16(bc_buf + pos + 1);
+                    if (idx >= 256)
+                        goto no_change;
+                    if (code_match(&cc, pos_next, M2(OP_post_dec, OP_post_inc), OP_put_loc, idx, OP_drop, -1) ||
+                        code_match(&cc, pos_next, M2(OP_dec, OP_inc), OP_dup, OP_put_loc, idx, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, (cc.op == OP_inc || cc.op == OP_post_inc) ? OP_inc_loc : OP_dec_loc);
+                        dbuf_putc(&bc_out, idx);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transformation:
+                       get_loc(n) push_atom_value(x) add dup put_loc(n) drop -> push_atom_value(x) add_loc(n)
+                     */
+                    if (code_match(&cc, pos_next, OP_push_atom_value, OP_add, OP_dup, OP_put_loc, idx, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+#if SHORT_OPCODES
+                        if (cc.atom == JS_ATOM_empty_string) {
+                            JS_FreeAtom(ctx, cc.atom);
+                            dbuf_putc(&bc_out, OP_push_empty_string);
+                        } else
+#endif
+                        {
+                            dbuf_putc(&bc_out, OP_push_atom_value);
+                            dbuf_put_u32(&bc_out, cc.atom);
+                        }
+                        dbuf_putc(&bc_out, OP_add_loc);
+                        dbuf_putc(&bc_out, idx);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transformation:
+                       get_loc(n) push_i32(x) add dup put_loc(n) drop -> push_i32(x) add_loc(n)
+                     */
+                    if (code_match(&cc, pos_next, OP_push_i32, OP_add, OP_dup, OP_put_loc, idx, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        push_short_int(&bc_out, cc.label);
+                        dbuf_putc(&bc_out, OP_add_loc);
+                        dbuf_putc(&bc_out, idx);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    /* transformation: XXX: also do these:
+                       get_loc(n) get_loc(x) add dup put_loc(n) drop -> get_loc(x) add_loc(n)
+                       get_loc(n) get_arg(x) add dup put_loc(n) drop -> get_arg(x) add_loc(n)
+                       get_loc(n) get_var_ref(x) add dup put_loc(n) drop -> get_var_ref(x) add_loc(n)
+                     */
+                    if (code_match(&cc, pos_next, M3(OP_get_loc, OP_get_arg, OP_get_var_ref), -1, OP_add, OP_dup, OP_put_loc, idx, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        put_short_code(&bc_out, cc.op, cc.idx);
+                        dbuf_putc(&bc_out, OP_add_loc);
+                        dbuf_putc(&bc_out, idx);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    add_pc2line_info(s, bc_out.size, line_num);
+                    put_short_code(&bc_out, op, idx);
+                    break;
+                }
+                goto no_change;
+#if SHORT_OPCODES
+            case OP_get_arg:
+            case OP_get_var_ref:
+                if (OPTIMIZE) {
+                    int idx;
+                    idx = get_u16(bc_buf + pos + 1);
+                    add_pc2line_info(s, bc_out.size, line_num);
+                    put_short_code(&bc_out, op, idx);
+                    break;
+                }
+                goto no_change;
+#endif
+            case OP_put_loc:
+            case OP_put_arg:
+            case OP_put_var_ref:
+                if (OPTIMIZE) {
+                    /* transformation: put_x(n) get_x(n) -> set_x(n) */
+                    int idx;
+                    idx = get_u16(bc_buf + pos + 1);
+                    if (code_match(&cc, pos_next, op - 1, idx, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        put_short_code(&bc_out, op + 1, idx);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    add_pc2line_info(s, bc_out.size, line_num);
+                    put_short_code(&bc_out, op, idx);
+                    break;
+                }
+                goto no_change;
+
+            case OP_post_inc:
+            case OP_post_dec:
+                if (OPTIMIZE) {
+                    /* transformation:
+                       post_inc put_x drop -> inc put_x
+                       post_inc perm3 put_field drop -> inc put_field
+                       post_inc perm3 put_var_strict drop -> inc put_var_strict
+                       post_inc perm4 put_array_el drop -> inc put_array_el
+                     */
+                    int op1, idx;
+                    if (code_match(&cc, pos_next, M3(OP_put_loc, OP_put_arg, OP_put_var_ref), -1, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        op1 = cc.op;
+                        idx = cc.idx;
+                        pos_next = cc.pos;
+                        if (code_match(&cc, cc.pos, op1 - 1, idx, -1)) {
+                            if (cc.line_num >= 0) line_num = cc.line_num;
+                            op1 += 1;   /* put_x(n) get_x(n) -> set_x(n) */
+                            pos_next = cc.pos;
+                        }
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_dec + (op - OP_post_dec));
+                        put_short_code(&bc_out, op1, idx);
+                        break;
+                    }
+                    if (code_match(&cc, pos_next, OP_perm3, M2(OP_put_field, OP_put_var_strict), OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_dec + (op - OP_post_dec));
+                        dbuf_putc(&bc_out, cc.op);
+                        dbuf_put_u32(&bc_out, cc.atom);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                    if (code_match(&cc, pos_next, OP_perm4, OP_put_array_el, OP_drop, -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        add_pc2line_info(s, bc_out.size, line_num);
+                        dbuf_putc(&bc_out, OP_dec + (op - OP_post_dec));
+                        dbuf_putc(&bc_out, OP_put_array_el);
+                        pos_next = cc.pos;
+                        break;
+                    }
+                }
+                goto no_change;
+
+#if SHORT_OPCODES
+            case OP_typeof:
+                if (OPTIMIZE) {
+                    /* simplify typeof tests */
+                    if (code_match(&cc, pos_next, OP_push_atom_value, M4(OP_strict_eq, OP_strict_neq, OP_eq, OP_neq), -1)) {
+                        if (cc.line_num >= 0) line_num = cc.line_num;
+                        int op1 = (cc.op == OP_strict_eq || cc.op == OP_eq) ? OP_strict_eq : OP_strict_neq;
+                        int op2 = -1;
+                        switch (cc.atom) {
+                            case JS_ATOM_undefined:
+                                op2 = OP_typeof_is_undefined;
+                                break;
+                            case JS_ATOM_function:
+                                op2 = OP_typeof_is_function;
+                                break;
+                        }
+                        if (op2 >= 0) {
+                            /* transform typeof(s) == "<type>" into is_<type> */
+                            if (op1 == OP_strict_eq) {
+                                add_pc2line_info(s, bc_out.size, line_num);
+                                dbuf_putc(&bc_out, op2);
+                                JS_FreeAtom(ctx, cc.atom);
+                                pos_next = cc.pos;
+                                break;
+                            }
+                            if (op1 == OP_strict_neq && code_match(&cc, cc.pos, OP_if_false, -1)) {
+                                /* transform typeof(s) != "<type>" if_false into is_<type> if_true */
+                                if (cc.line_num >= 0) line_num = cc.line_num;
+                                add_pc2line_info(s, bc_out.size, line_num);
+                                dbuf_putc(&bc_out, op2);
+                                JS_FreeAtom(ctx, cc.atom);
+                                pos_next = cc.pos;
+                                label = cc.label;
+                                op = OP_if_true;
+                                goto has_label;
+                            }
+                        }
+                    }
+                }
+                goto no_change;
+#endif
+
+            default:
+            no_change:
+                add_pc2line_info(s, bc_out.size, line_num);
+                dbuf_put(&bc_out, bc_buf + pos, len);
+                break;
+        }
+    }
+
+    /* check that there were no missing labels */
+    for(i = 0; i < s->label_count; i++) {
+        assert(label_slots[i].first_reloc == NULL);
+    }
+#if SHORT_OPCODES
+    if (OPTIMIZE) {
+        /* more jump optimizations */
+        int patch_offsets = 0;
+        for (i = 0, jp = s->jump_slots; i < s->jump_count; i++, jp++) {
+            LabelSlot *ls;
+            JumpSlot *jp1;
+            int j, pos, diff, delta;
+
+            delta = 3;
+            switch (op = jp->op) {
+                case OP_goto16:
+                    delta = 1;
+                    /* fall thru */
+                case OP_if_false:
+                case OP_if_true:
+                case OP_goto:
+                    pos = jp->pos;
+                    diff = s->label_slots[jp->label].addr - pos;
+                    if (diff >= -128 && diff <= 127 + delta) {
+                        //put_u8(bc_out.buf + pos, diff);
+                        jp->size = 1;
+                        if (op == OP_goto16) {
+                            bc_out.buf[pos - 1] = jp->op = OP_goto8;
+                        } else {
+                            bc_out.buf[pos - 1] = jp->op = OP_if_false8 + (op - OP_if_false);
+                        }
+                        goto shrink;
+                    } else
+                    if (diff == (int16_t)diff && op == OP_goto) {
+                        //put_u16(bc_out.buf + pos, diff);
+                        jp->size = 2;
+                        delta = 2;
+                        bc_out.buf[pos - 1] = jp->op = OP_goto16;
+                        shrink:
+                        /* XXX: should reduce complexity, using 2 finger copy scheme */
+                        memmove(bc_out.buf + pos + jp->size, bc_out.buf + pos + jp->size + delta,
+                                bc_out.size - pos - jp->size - delta);
+                        bc_out.size -= delta;
+                        patch_offsets++;
+                        for (j = 0, ls = s->label_slots; j < s->label_count; j++, ls++) {
+                            if (ls->addr > pos)
+                                ls->addr -= delta;
+                        }
+                        for (j = i + 1, jp1 = jp + 1; j < s->jump_count; j++, jp1++) {
+                            if (jp1->pos > pos)
+                                jp1->pos -= delta;
+                        }
+                        for (j = 0; j < s->line_number_count; j++) {
+                            if (s->line_number_slots[j].pc > pos)
+                                s->line_number_slots[j].pc -= delta;
+                        }
+                        continue;
+                    }
+                    break;
+            }
+        }
+        if (patch_offsets) {
+            JumpSlot *jp1;
+            int j;
+            for (j = 0, jp1 = s->jump_slots; j < s->jump_count; j++, jp1++) {
+                int diff1 = s->label_slots[jp1->label].addr - jp1->pos;
+                switch (jp1->size) {
+                    case 1:
+                        put_u8(bc_out.buf + jp1->pos, diff1);
+                        break;
+                    case 2:
+                        put_u16(bc_out.buf + jp1->pos, diff1);
+                        break;
+                    case 4:
+                        put_u32(bc_out.buf + jp1->pos, diff1);
+                        break;
+                }
+            }
+        }
+    }
+    js_free(ctx, s->jump_slots);
+    s->jump_slots = NULL;
+#endif
+    js_free(ctx, s->label_slots);
+    s->label_slots = NULL;
+    /* XXX: should delay until copying to runtime bytecode function */
+    compute_pc2line_info(s);
+    js_free(ctx, s->line_number_slots);
+    s->line_number_slots = NULL;
+    /* set the new byte code */
+    dbuf_free(&s->byte_code);
+    s->byte_code = bc_out;
+    s->use_short_opcodes = TRUE;
+    if (dbuf_error(&s->byte_code)) {
+        JS_ThrowOutOfMemory(ctx);
+        return -1;
+    }
+    return 0;
+    fail:
+    /* XXX: not safe */
+    dbuf_free(&bc_out);
+    return -1;
+}

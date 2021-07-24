@@ -51,4 +51,6 @@ int add_var_this(JSContext *ctx, JSFunctionDef *fd);
 
 int find_closure_var(JSContext *ctx, JSFunctionDef *s,
                      JSAtom var_name);
+
+__exception int resolve_labels(JSContext *ctx, JSFunctionDef *s);
 #endif //LOX_JS_QJS_RESOLVER_H
