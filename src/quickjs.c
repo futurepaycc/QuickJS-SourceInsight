@@ -24222,7 +24222,7 @@ static void js_array_buffer_free(JSRuntime *rt, void *opaque, void *ptr)
     js_free_rt(rt, ptr);
 }
 
-static JSValue js_array_buffer_constructor2(JSContext *ctx,
+ JSValue js_array_buffer_constructor2(JSContext *ctx,
                                             JSValueConst new_target,
                                             uint64_t len, JSClassID class_id)
 {

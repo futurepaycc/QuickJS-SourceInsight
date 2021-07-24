@@ -10,4 +10,8 @@
 JSValue js_array_buffer_constructor1(JSContext *ctx,
                                      JSValueConst new_target,
                                      uint64_t len);
+
+JSValue js_array_buffer_constructor2(JSContext *ctx,
+                                     JSValueConst new_target,
+                                     uint64_t len, JSClassID class_id);
 #endif //LOX_JS_ECMA_ARRAYBUFFER_H
