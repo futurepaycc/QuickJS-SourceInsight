@@ -83,9 +83,7 @@ static void js_for_in_iterator_finalizer(JSRuntime *rt, JSValue val);
 
 static void js_regexp_finalizer(JSRuntime *rt, JSValue val);
 static void js_array_buffer_finalizer(JSRuntime *rt, JSValue val);
-static void js_typed_array_finalizer(JSRuntime *rt, JSValue val);
-static void js_typed_array_mark(JSRuntime *rt, JSValueConst val,
-                                JS_MarkFunc *mark_func);
+
 static void js_proxy_finalizer(JSRuntime *rt, JSValue val);
 static void js_proxy_mark(JSRuntime *rt, JSValueConst val,
                                 JS_MarkFunc *mark_func);

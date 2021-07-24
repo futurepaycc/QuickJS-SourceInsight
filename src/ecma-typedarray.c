@@ -57,7 +57,7 @@ static int validate_typed_array(JSContext *ctx, JSValueConst this_val) {
     return 0;
 }
 
-static JSValue js_typed_array_get_length(JSContext *ctx,
+ JSValue js_typed_array_get_length(JSContext *ctx,
                                          JSValueConst this_val) {
     JSObject *p;
     p = get_typed_array(ctx, this_val, 0);
@@ -140,7 +140,7 @@ JSValue JS_GetTypedArrayBuffer(JSContext *ctx, JSValueConst obj,
     return JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, ta->buffer));
 }
 
-static JSValue js_typed_array_get_toStringTag(JSContext *ctx,
+ JSValue js_typed_array_get_toStringTag(JSContext *ctx,
                                               JSValueConst this_val) {
     JSObject *p;
     if (JS_VALUE_GET_TAG(this_val) != JS_TAG_OBJECT)
@@ -229,7 +229,7 @@ static JSValue js_typed_array_set_internal(JSContext *ctx,
     return JS_EXCEPTION;
 }
 
-static JSValue js_typed_array_set(JSContext *ctx,
+ JSValue js_typed_array_set(JSContext *ctx,
                                   JSValueConst this_val,
                                   int argc, JSValueConst *argv) {
     JSValueConst offset = JS_UNDEFINED;
@@ -239,7 +239,7 @@ static JSValue js_typed_array_set(JSContext *ctx,
     return js_typed_array_set_internal(ctx, this_val, argv[0], offset);
 }
 
-static JSValue js_create_typed_array_iterator(JSContext *ctx, JSValueConst this_val,
+ JSValue js_create_typed_array_iterator(JSContext *ctx, JSValueConst this_val,
                                               int argc, JSValueConst *argv, int magic) {
     if (validate_typed_array(ctx, this_val))
         return JS_EXCEPTION;
@@ -454,7 +454,7 @@ JSValue js_typed_array___speciesCreate(JSContext *ctx,
     return obj;
 }
 
-static JSValue js_typed_array_copyWithin(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_copyWithin(JSContext *ctx, JSValueConst this_val,
                                          int argc, JSValueConst *argv) {
     JSObject *p;
     int len, to, from, final, count, shift;
@@ -488,7 +488,7 @@ static JSValue js_typed_array_copyWithin(JSContext *ctx, JSValueConst this_val,
     return JS_DupValue(ctx, this_val);
 }
 
-static JSValue js_typed_array_fill(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_fill(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv) {
     JSObject *p;
     int len, k, final, shift;
@@ -577,7 +577,7 @@ static JSValue js_typed_array_fill(JSContext *ctx, JSValueConst this_val,
     return JS_DupValue(ctx, this_val);
 }
 
-static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv, int findIndex) {
     JSValueConst func, this_arg;
     JSValueConst args[3];
@@ -628,11 +628,9 @@ static JSValue js_typed_array_find(JSContext *ctx, JSValueConst this_val,
     return JS_EXCEPTION;
 }
 
-#define special_indexOf 0
-#define special_lastIndexOf 1
-#define special_includes -1
 
-static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
+
+ JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv, int special) {
     JSObject *p;
     int len, tag, is_int, is_bigint, k, stop, inc, res = -1;
@@ -872,7 +870,7 @@ static JSValue js_typed_array_indexOf(JSContext *ctx, JSValueConst this_val,
     return JS_EXCEPTION;
 }
 
-static JSValue js_typed_array_join(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_join(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv, int toLocaleString) {
     JSValue sep = JS_UNDEFINED, el;
     StringBuffer b_s, *b = &b_s;
@@ -930,7 +928,7 @@ static JSValue js_typed_array_join(JSContext *ctx, JSValueConst this_val,
     return JS_EXCEPTION;
 }
 
-static JSValue js_typed_array_reverse(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_reverse(JSContext *ctx, JSValueConst this_val,
                                       int argc, JSValueConst *argv) {
     JSObject *p;
     int len;
@@ -988,7 +986,7 @@ static JSValue js_typed_array_reverse(JSContext *ctx, JSValueConst this_val,
     return JS_DupValue(ctx, this_val);
 }
 
-static JSValue js_typed_array_slice(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_slice(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv) {
     JSValueConst args[2];
     JSValue arr, val;
@@ -1050,7 +1048,7 @@ static JSValue js_typed_array_slice(JSContext *ctx, JSValueConst this_val,
     return JS_EXCEPTION;
 }
 
-static JSValue js_typed_array_subarray(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_subarray(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv) {
     JSValueConst args[4];
     JSValue arr, byteOffset, ta_buffer;
@@ -1258,7 +1256,7 @@ static int js_TA_cmp_generic(const void *a, const void *b, void *opaque) {
     return cmp;
 }
 
-static JSValue js_typed_array_sort(JSContext *ctx, JSValueConst this_val,
+ JSValue js_typed_array_sort(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv) {
     JSObject *p;
     int len;
@@ -1586,7 +1584,7 @@ static JSValue js_typed_array_constructor_ta(JSContext *ctx,
     return JS_EXCEPTION;
 }
 
-static JSValue js_typed_array_constructor(JSContext *ctx,
+ JSValue js_typed_array_constructor(JSContext *ctx,
                                           JSValueConst new_target,
                                           int argc, JSValueConst *argv,
                                           int classid) {
@@ -1653,7 +1651,7 @@ static JSValue js_typed_array_constructor(JSContext *ctx,
     return obj;
 }
 
-static void js_typed_array_finalizer(JSRuntime *rt, JSValue val) {
+ void js_typed_array_finalizer(JSRuntime *rt, JSValue val) {
     JSObject *p = JS_VALUE_GET_OBJ(val);
     JSTypedArray *ta = p->u.typed_array;
     if (ta) {
@@ -1667,7 +1665,7 @@ static void js_typed_array_finalizer(JSRuntime *rt, JSValue val) {
     }
 }
 
-static void js_typed_array_mark(JSRuntime *rt, JSValueConst val,
+ void js_typed_array_mark(JSRuntime *rt, JSValueConst val,
                                 JS_MarkFunc *mark_func) {
     JSObject *p = JS_VALUE_GET_OBJ(val);
     JSTypedArray *ta = p->u.typed_array;

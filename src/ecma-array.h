@@ -26,7 +26,7 @@ typedef struct JSArrayIteratorData {
                                             JSFreeArrayBufferDataFunc *free_func,
                                             void *opaque, BOOL alloc_flag);
  JSArrayBuffer *js_get_array_buffer(JSContext *ctx, JSValueConst obj);
-static JSValue js_typed_array_constructor(JSContext *ctx,
+ JSValue js_typed_array_constructor(JSContext *ctx,
                                           JSValueConst this_val,
                                           int argc, JSValueConst *argv,
                                           int classid);
